@@ -1,0 +1,59 @@
+plugins {
+    id 'java'
+    id("com.gradleup.shadow") version "9.3.1"
+}
+
+group = 'dev.oakheart'
+version = '1.0.0'
+
+repositories {
+    mavenCentral()
+    maven {
+        name = "papermc-repo"
+        url = "https://repo.papermc.io/repository/maven-public/"
+    }
+    maven {
+        name = "placeholderapi"
+        url = "https://repo.extendedclip.com/content/repositories/placeholderapi/"
+    }
+}
+
+dependencies {
+    compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
+    compileOnly("me.clip:placeholderapi:2.11.6")
+    compileOnly(fileTree(dir: 'libs', include: ['*.jar'])) // PhoenixCratesPro API (not on Maven Central)
+    implementation("org.bstats:bstats-bukkit:3.1.0")
+    compileOnly("org.xerial:sqlite-jdbc:3.47.1.0")
+    compileOnly("com.mysql:mysql-connector-j:9.1.0")
+    compileOnly("com.zaxxer:HikariCP:6.2.1")
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+}
+
+compileJava {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs += ['-Xlint:deprecation', '-Xlint:unchecked']
+}
+
+processResources {
+    def props = [version: version]
+    inputs.properties props
+    filteringCharset 'UTF-8'
+    filesMatching('paper-plugin.yml') {
+        expand props
+    }
+}
+
+shadowJar {
+    archiveClassifier.set('')
+    relocate("org.bstats", "dev.oakheart.oakoverflow.bstats")
+}
+
+jar {
+    archiveClassifier.set('slim')
+}
+
+tasks.assemble.dependsOn(tasks.shadowJar)

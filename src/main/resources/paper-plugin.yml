@@ -1,0 +1,77 @@
+name: OakOverflow
+version: '${version}'
+main: dev.oakheart.oakoverflow.OakOverflow
+description: 'Smart Inventory Overflow Storage System.'
+api-version: '1.21.10'
+authors:
+  - Loralon
+website: https://github.com/LoralonMC/OakOverflow
+libraries:
+  - "com.mysql:mysql-connector-j:9.1.0"
+  - "com.zaxxer:HikariCP:6.2.1"
+dependencies:
+  server:
+    PlaceholderAPI:
+      load: BEFORE
+      required: false
+    PhoenixCratesPro:
+      load: BEFORE
+      required: false
+permissions:
+  oakoverflow.*:
+    description: 'Grants all OakOverflow permissions'
+    default: op
+    children:
+      oakoverflow.use: true
+      oakoverflow.notify: true
+      oakoverflow.admin.*: true
+  oakoverflow.use:
+    description: 'Access basic unclaimed items features'
+    default: true
+  oakoverflow.notify:
+    description: 'Receive notifications about unclaimed items'
+    default: true
+  # Bypass permissions are intentionally excluded from oakoverflow.* wildcard.
+  # They are opt-in only — OPs should not auto-bypass overflow storage.
+  oakoverflow.bypass:
+    description: 'Items always go directly to inventory (bypass overflow storage)'
+    default: false
+  oakoverflow.bypass.limits:
+    description: 'Bypass max items per player limit'
+    default: false
+  oakoverflow.admin.*:
+    description: 'All admin permissions'
+    default: op
+    children:
+      oakoverflow.admin: true
+      oakoverflow.admin.view: true
+      oakoverflow.admin.clear: true
+      oakoverflow.admin.clearall: true
+      oakoverflow.admin.stats: true
+      oakoverflow.admin.reload: true
+      oakoverflow.admin.purge: true
+      oakoverflow.admin.migrate: true
+  oakoverflow.admin:
+    description: 'Base admin permission (view help)'
+    default: op
+  oakoverflow.admin.view:
+    description: "View other players' overflow items"
+    default: op
+  oakoverflow.admin.clear:
+    description: "Clear a player's overflow items"
+    default: op
+  oakoverflow.admin.clearall:
+    description: 'Clear all overflow items'
+    default: op
+  oakoverflow.admin.stats:
+    description: 'View overflow statistics'
+    default: op
+  oakoverflow.admin.reload:
+    description: 'Reload the configuration'
+    default: op
+  oakoverflow.admin.purge:
+    description: 'Purge corrupted items from the database'
+    default: op
+  oakoverflow.admin.migrate:
+    description: 'Migrate database between SQLite and MySQL'
+    default: op

@@ -1,0 +1,366 @@
+# ============================================================
+# OAKOVERFLOW CONFIGURATION
+# ============================================================
+# Smart Inventory Overflow Storage System
+# https://github.com/LoralonMC/OakOverflow
+#
+# MiniMessage formatting guide: https://docs.advntr.dev/minimessage/format.html
+
+# ============================================================
+# PERFORMANCE SETTINGS
+# ============================================================
+# How OakOverflow works:
+# - Items go to your inventory when there's space
+# - Items automatically go to overflow storage when inventory is full
+# - Use /overflow (or /of) to view and claim overflow items
+performance:
+  # Maximum distance (in blocks) to detect players for item interception
+  # Items spawned beyond this radius will not be intercepted
+  interception-radius: 5.0
+  # Ambiguity threshold (in blocks) for multi-player scenarios
+  # If two players are within the radius and the distance difference between them
+  # is less than this value, the item will NOT be intercepted to avoid misattribution
+  # Set to 0 to disable ambiguity checking (always give to nearest player)
+  interception-ambiguity-threshold: 1.5
+
+# ============================================================
+# ITEM LIMITS
+# ============================================================
+limits:
+  # Maximum number of unclaimed items a player can have
+  # Set to -1 for unlimited
+  max-items-per-player: -1
+  # Auto-delete items older than X days
+  # Set to -1 to disable auto-deletion
+  auto-delete-days: -1
+
+# ============================================================
+# NOTIFICATIONS
+# ============================================================
+notifications:
+  # Join notification settings
+  join:
+    enabled: true
+    # Delay in ticks (20 ticks = 1 second)
+    delay: 40
+    # Minimum items needed to trigger notification
+    min-items: 1
+  # In-game notifications when new items arrive
+  receive:
+    enabled: true
+  # Action bar updates
+  action-bar:
+    enabled: true
+    # How often to update (in ticks, 20 = 1 second)
+    update-interval: 60
+    # Only show when player has unclaimed items
+    only-when-items: true
+  # Expiry warning: notify players on join when items are nearing auto-deletion
+  # Only active when auto-delete-days is enabled (> 0)
+  expiry-warning:
+    enabled: true
+    # Warn when items will be deleted within this many days
+    days-before: 3
+
+# ============================================================
+# GUI SETTINGS
+# ============================================================
+gui:
+  # GUI size (must be multiple of 9, max 54)
+  size: 54
+  # GUI title (supports MiniMessage)
+  title: "<#FCD472>Overflow Storage"
+  # Items per page (leave some slots for navigation buttons)
+  items-per-page: 45
+  # Update GUI in real-time when items are claimed
+  auto-update: true
+  # Button materials (must be valid Bukkit Material names)
+  buttons:
+    previous-page: ARROW
+    next-page: ARROW
+    claim-all: EMERALD
+    view-only: BARRIER
+    filler: GRAY_STAINED_GLASS_PANE
+    sort: HOPPER
+    capacity-indicator: CHEST
+  # GUI sounds
+  sounds:
+    enabled: true
+    open: "minecraft:block.chest.open"
+    claim: "minecraft:entity.experience_orb.pickup"
+    claim-all: "minecraft:ui.toast.challenge_complete"
+    navigation: "minecraft:ui.button.click"
+
+# ============================================================
+# DATABASE
+# ============================================================
+database:
+  # Database type: SQLITE or MYSQL
+  type: SQLITE
+  # SQLite settings
+  sqlite:
+    # Database file name (stored in plugin data folder)
+    filename: "oakoverflow.db"
+    # Enable Write-Ahead Logging (better concurrency and crash safety)
+    wal-mode: true
+  # MySQL settings
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "oakoverflow"
+    # Create a dedicated database user instead of using root
+    username: "root"
+    password: "password"
+    # SSL mode: DISABLED, PREFERRED, REQUIRED, VERIFY_CA, VERIFY_IDENTITY
+    ssl-mode: DISABLED
+    # Connection properties
+    properties:
+      characterEncoding: "utf8mb4"
+      serverTimezone: "UTC"
+      autoReconnect: false
+      maxReconnects: 3
+  # Connection pool settings (applies to MySQL)
+  pool:
+    max-connections: 10
+    min-idle-connections: 2
+    connection-timeout: 5000
+    max-lifetime: 1800000
+    idle-timeout: 600000
+    test-on-borrow: true
+
+# ============================================================
+# PLUGIN INTEGRATIONS
+# ============================================================
+integration:
+  # PhoenixCratesPro integration
+  # Intercepts crate rewards and redirects them to overflow when inventory is full.
+  #
+  # IMPORTANT: Disable PhoenixCrates' built-in /crate claim command in its own
+  # config to prevent item duplication. PhoenixCrates' reward event is not
+  # cancellable, so items will exist in both databases — disabling their claim
+  # command ensures players only retrieve items through /overflow.
+  phoenixcrates:
+    enabled: false
+    intercept-rewards: true
+  # PlaceholderAPI integration
+  # Provides: %oakoverflow_unclaimed_count%, %oakoverflow_has_items%, %oakoverflow_has_items_yes_no%
+  placeholderapi:
+    enabled: true
+
+# ============================================================
+# MESSAGES
+# ============================================================
+# All messages support MiniMessage formatting: https://docs.advntr.dev/minimessage/format.html
+#
+# Gameplay messages use text/display structure:
+#   text: "MiniMessage string"
+#   display: chat or action_bar
+#
+# Command messages use flat strings (always delivered via chat).
+# Set any message to "" to disable it.
+#
+# Placeholders:
+#   <prefix>  - Auto-replaced with prefix value below
+#   <count>   - Number of items/players
+#   <player>  - Player name
+#   <item>    - Item name
+#   <amount>  - Item quantity
+#   <source>  - Where item came from
+#   <age>     - Time since received
+#   <total>   - Total items in database
+#   <unclaimed> - Number of unclaimed items
+#   <current> - Current page number
+messages:
+  prefix: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] "
+
+  # Gameplay messages (player-facing events)
+  no-unclaimed-items:
+    text: "<prefix><#f2ebd7>You have no unclaimed items."
+    display: chat
+  items-count:
+    text: "<prefix><#f2ebd7>You have <#FCD472><count><#f2ebd7> unclaimed items."
+    display: chat
+  claim-success:
+    text: "<prefix><#8FAA87>Claimed <#FCD472><amount>x <item><#8FAA87>!"
+    display: chat
+  claim-all-success:
+    text: "<prefix><#8FAA87>Claimed <#FCD472><count><#8FAA87> items!"
+    display: chat
+  claim-all-partial:
+    text: "<prefix><#8FAA87>Claimed <#FCD472><claimed><#8FAA87> items. <#D89B6A><returned><#D89B6A> items returned to overflow (inventory full)."
+    display: chat
+  claim-failed-full:
+    text: "<prefix><#C27B6B>Not enough inventory space. Make room and try again."
+    display: chat
+  limit-reached:
+    text: "<prefix><#D89B6A>Overflow storage is full. Claim items with <#FCD472>/overflow<#D89B6A>."
+    display: chat
+  item-received:
+    text: "<#FCD472><amount>x <item> <#D89B6A>sent to overflow <#6C757D>(<source>)"
+    display: action_bar
+  join-notification:
+    text: "<prefix><#f2ebd7>You have <#FCD472><count><#f2ebd7> unclaimed items. <click:run_command:/overflow><hover:show_text:'<#8FAA87>Open overflow storage'><#FCD472>[ᴏᴘᴇɴ]</hover></click>"
+    display: chat
+  action-bar-unclaimed:
+    text: "<#FCD472>✉ <#f2ebd7><count> unclaimed items <#6C757D>• <#FCD472>/overflow"
+    display: action_bar
+  # Expiry warning: sent on join when items are nearing auto-deletion
+  # Placeholders: <count> - number of expiring items, <days> - days until deletion
+  expiry-warning:
+    text: "<prefix><#D89B6A><count> items will be auto-deleted within <#FCD472><days><#D89B6A> days. <click:run_command:/overflow><hover:show_text:'<#8FAA87>Open overflow storage'><#FCD472>[ᴄʟᴀɪᴍ ɴᴏᴡ]</hover></click>"
+    display: chat
+
+  # Command messages (flat strings, always chat)
+  commands:
+    # Player help
+    player-help-header: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<#FCD472><bold>OakOverflow</bold>\n<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    player-help-open: "<#FCD472>/overflow <#6C757D>— <#f2ebd7>Open overflow storage"
+    player-help-count: "<#FCD472>/overflow count <#6C757D>— <#f2ebd7>Show unclaimed item count"
+    player-help-claimall: "<#FCD472>/overflow claimall <#6C757D>— <#f2ebd7>Claim all items at once"
+    player-help-footer: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    # Admin help
+    help-header: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<#FCD472><bold>OakOverflow Admin</bold>\n<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    help-view: "<#FCD472>/oakoverflow view <#6C757D><<#f2ebd7>player<#6C757D>> <#6C757D>— <#f2ebd7>View a player's overflow"
+    help-clear: "<#FCD472>/oakoverflow clear <#6C757D><<#f2ebd7>player<#6C757D>> <#6C757D>— <#f2ebd7>Clear a player's items"
+    help-clearall: "<#FCD472>/oakoverflow clearall <#6C757D>— <#f2ebd7>Clear all items"
+    help-stats: "<#FCD472>/oakoverflow stats <#6C757D>— <#f2ebd7>Database statistics"
+    help-reload: "<#FCD472>/oakoverflow reload <#6C757D>— <#f2ebd7>Reload configuration"
+    help-purge: "<#FCD472>/oakoverflow purge <#6C757D>— <#f2ebd7>Remove corrupted items"
+    help-migrate: "<#FCD472>/oakoverflow migrate <#6C757D><<#f2ebd7>sqlite|mysql<#6C757D>> <#6C757D>— <#f2ebd7>Migrate database"
+    help-footer: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    # Admin view
+    player-never-joined: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>Player <#FCD472><player><#C27B6B> has never joined this server."
+    # Admin clear
+    no-items-to-clear: "<prefix><#D89B6A><player> has no unclaimed items to clear."
+    clear-success: "<prefix><#8FAA87>Cleared <#FCD472><count><#8FAA87> items for <#FCD472><player><#8FAA87>."
+    clear-notification: "<prefix><#D89B6A>Your unclaimed items have been cleared by an administrator."
+    # Admin clearall
+    clear-all-success: "<prefix><#8FAA87>Cleared <#FCD472><count><#8FAA87> items from all players."
+    clearall-warning: "<#C27B6B><bold>⚠ Warning</bold>\n<#f2ebd7>This will permanently delete all unclaimed items for every player.\n<#D89B6A>Run <#FCD472>/oakoverflow clearall confirm<#D89B6A> within 30 seconds to proceed."
+    clearall-confirm-expired: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>Confirmation expired. Run the command again."
+    clearall-processing: "<prefix><#D89B6A>Clearing all unclaimed items..."
+    clearall-broadcast: "<prefix><#D89B6A>All unclaimed items have been cleared by an administrator."
+    # Reload
+    reload-success: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>Configuration reloaded."
+    reload-failed: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>Failed to reload configuration. Check console."
+    reload-processing: "<prefix><#D89B6A>Reloading configuration..."
+    # Stats
+    loading-stats: "<prefix><#D89B6A>Loading statistics..."
+    stats-header: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<#FCD472><bold>OakOverflow Statistics</bold>\n<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    stats-total: "<#f2ebd7>Total Items <#6C757D>— <#FCD472><total>"
+    stats-unclaimed: "<#f2ebd7>Unclaimed <#6C757D>— <#FCD472><unclaimed>"
+    stats-claimed: "<#f2ebd7>Claimed <#6C757D>— <#FCD472><claimed>"
+    stats-players: "<#f2ebd7>Unique Players <#6C757D>— <#FCD472><players>"
+    stats-schema-version: "<#f2ebd7>Schema Version <#6C757D>— <#FCD472><version>"
+    stats-oldest: "<#f2ebd7>Oldest Item <#6C757D>— <#FCD472><age>"
+    stats-footer: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    # Purge
+    purge-processing: "<prefix><#D89B6A>Scanning for corrupted items..."
+    purge-success: "<prefix><#8FAA87>Purged <#FCD472><count><#8FAA87> corrupted items."
+    purge-none: "<prefix><#8FAA87>No corrupted items found."
+    # Migrate
+    migrate-warning: "<#C27B6B><bold>⚠ Warning</bold>\n<#f2ebd7>This will migrate all data from <#FCD472><source><#f2ebd7> to <#FCD472><target><#f2ebd7>.\n<#D89B6A>Run <#FCD472>/oakoverflow migrate <target> confirm<#D89B6A> within 30 seconds to proceed."
+    migrate-confirm-expired: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>Confirmation expired. Run the command again."
+    migrate-started: "<prefix><#D89B6A>Starting database migration..."
+    migrate-progress: "<prefix><#D89B6A>Migrating <#FCD472><count><#D89B6A> items..."
+    migrate-success: "<prefix><#8FAA87>Migration complete! <#FCD472><count><#8FAA87> items migrated to <#FCD472><target><#8FAA87>."
+    migrate-failed: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>Migration failed. Check console for details. Original database is unchanged."
+    migrate-invalid-target: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>Configure MySQL settings in config.yml before migrating."
+    migrate-same-type: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>Already using <#FCD472><type><#C27B6B> database."
+    # Errors
+    database-error: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>A database error occurred. Contact an administrator."
+    corrupted-item: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>This item is corrupted and cannot be claimed."
+    # Integration
+    player-not-found: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>Player <#FCD472><player><#C27B6B> not found."
+
+  # GUI messages
+  gui:
+    # Lore appended to items in player view (empty list = no extra lore)
+    # Placeholders: <amount>, <source>, <age>
+    player-item-lore: []
+    # Lore appended to items in admin view
+    # Placeholders: <amount>, <source>, <age>
+    admin-item-lore:
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+      - "<#6C757D>Amount: <#FCD472><amount>"
+      - "<#6C757D>Source: <#FCD472><source>"
+      - "<#6C757D>Received: <#FCD472><age>"
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    corrupted-item-name: "<#C27B6B><bold>Corrupted Item</bold>"
+    corrupted-item-lore:
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+      - "<#6C757D>This item failed to load."
+      - "<#6C757D>It may be corrupted or"
+      - "<#6C757D>from an older version."
+      - ""
+      - "<#6C757D>ID: <#FCD472><id>"
+      - "<#6C757D>Source: <#FCD472><source>"
+      - "<#6C757D>Received: <#FCD472><age>"
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+      - "<#C27B6B>Cannot be claimed"
+    claim-all-button:
+      name: "<#8FAA87><bold>Claim All</bold>"
+      lore:
+        - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+        - "<#f2ebd7>Claim all <#FCD472><count><#f2ebd7> items at once"
+        - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    next-page-button:
+      name: "<#f2ebd7>Next Page <#8FAA87>→"
+      lore:
+        - "<#6C757D>Page <#FCD472><current><#6C757D> of <#FCD472><total>"
+    previous-page-button:
+      name: "<#8FAA87>← <#f2ebd7>Previous Page"
+      lore:
+        - "<#6C757D>Page <#FCD472><current><#6C757D> of <#FCD472><total>"
+    filler-item:
+      name: " "
+    # Sort button
+    sort-button-name: "<#FCD472><bold>Sort</bold>"
+    sort-button-lore:
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+      - "<#f2ebd7>Current: <#FCD472><mode>"
+      - ""
+      - "<#6C757D>Click to cycle sort mode"
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    sort-mode-newest: "Newest First"
+    sort-mode-oldest: "Oldest First"
+    sort-mode-type: "By Type"
+    sort-mode-source: "By Source"
+    # Capacity indicator (shown when max-items-per-player is set)
+    # Placeholders: <count>, <max>, <percentage>
+    capacity-indicator-name: "<#FCD472><count><#6C757D>/<#FCD472><max> <#f2ebd7>Items"
+    capacity-indicator-lore:
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+      - "<#f2ebd7>Storage: <#FCD472><percentage>%<#f2ebd7> used"
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    admin-view-empty: "<prefix><#D89B6A><player> has no unclaimed items."
+    admin-view-title: "<#FCD472><player><#f2ebd7>'s Overflow"
+    view-only-button-name: "<#C27B6B>View Only"
+    view-only-button-lore:
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+      - "<#6C757D>Viewing <#FCD472><player><#6C757D>'s items"
+      - "<#C27B6B>Claiming is disabled"
+      - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    view-only-denied: "<prefix><#C27B6B>You cannot claim items in view-only mode."
+
+# ============================================================
+# ADVANCED SETTINGS
+# ============================================================
+advanced:
+  # Debug mode (verbose logging)
+  debug: false
+  # Thread pool size for async operations
+  async-threads: 2
+  # Cache unclaimed counts (improves performance)
+  cache:
+    enabled: true
+    # Cache duration in seconds
+    duration: 30
+  # Maximum items to fetch in a single query (prevents memory issues)
+  # Set to -1 for unlimited (not recommended for production)
+  max-query-limit: 10000
+
+# ============================================================
+#          DO NOT EDIT BELOW
+# ============================================================
+config-version: 1
