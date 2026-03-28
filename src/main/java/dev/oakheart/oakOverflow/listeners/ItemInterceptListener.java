@@ -89,6 +89,11 @@ public class ItemInterceptListener implements Listener {
             return;
         }
 
+        // Skip items tagged by other plugins as "don't intercept"
+        if (itemEntity.getScoreboardTags().stream().anyMatch(tag -> tag.startsWith("oaktools_"))) {
+            return;
+        }
+
         // Check if item was dropped by a player (Q key) - NEVER intercept
         if (itemEntity.getOwner() != null || itemEntity.getThrower() != null) {
             return;
