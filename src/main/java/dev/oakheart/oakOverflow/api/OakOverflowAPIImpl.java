@@ -33,11 +33,31 @@ public class OakOverflowAPIImpl implements OakOverflowAPI {
     @Override
     public CompletableFuture<OverflowItem> addOverflowItem(UUID playerUUID, String playerName,
                                                              ItemStack item, int amount, String source) {
-        return dataStore.addOverflowItem(playerUUID, playerName, item, amount, source)
-                .thenApply(overflowItem -> {
-                    countCache.invalidate(playerUUID);
-                    return overflowItem;
-                });
+        // Try to merge with an existing unclaimed item of the same type
+        return dataStore.getUnclaimedItems(playerUUID).thenCompose(existingItems -> {
+            for (OverflowItem existing : existingItems) {
+                if (!existing.isCorrupted() && existing.getItem().isSimilar(item)) {
+                    int newAmount = existing.getAmount() + amount;
+                    return dataStore.updateItemAmount(existing.getId(), newAmount)
+                            .thenApply(success -> {
+                                countCache.invalidate(playerUUID);
+                                if (success) {
+                                    return new OverflowItem(existing.getId(), playerUUID, playerName,
+                                            item, newAmount, existing.getReceivedTimestamp(),
+                                            existing.getSource(), false, null);
+                                }
+                                return existing;
+                            });
+                }
+            }
+
+            // No matching item found — insert new
+            return dataStore.addOverflowItem(playerUUID, playerName, item, amount, source)
+                    .thenApply(overflowItem -> {
+                        countCache.invalidate(playerUUID);
+                        return overflowItem;
+                    });
+        });
     }
 
     @Override

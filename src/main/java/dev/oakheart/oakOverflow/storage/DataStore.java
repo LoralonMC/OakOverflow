@@ -22,6 +22,8 @@ public interface DataStore {
     CompletableFuture<OverflowItem> addOverflowItem(UUID playerUUID, String playerName,
                                                       ItemStack item, int amount, String source);
 
+    CompletableFuture<Boolean> updateItemAmount(int itemId, int newAmount);
+
     CompletableFuture<List<OverflowItem>> getUnclaimedItems(UUID playerUUID);
 
     CompletableFuture<List<OverflowItem>> getUnclaimedItems(UUID playerUUID, int limit);

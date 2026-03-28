@@ -44,6 +44,8 @@ public abstract class AbstractDatabase implements DataStore {
             FROM overflow_items
             WHERE id = ?
             """;
+    protected static final String SQL_UPDATE_AMOUNT =
+            "UPDATE overflow_items SET amount = ? WHERE id = ? AND claimed = 0";
     protected static final String SQL_COUNT_UNCLAIMED =
             "SELECT COUNT(*) as count FROM overflow_items WHERE player_uuid = ? AND claimed = 0";
     protected static final String SQL_MARK_CLAIMED =
@@ -236,6 +238,30 @@ public abstract class AbstractDatabase implements DataStore {
             } catch (Exception e) {
                 logger.log(Level.SEVERE, "Failed to add overflow item for " + playerName, e);
                 throw new RuntimeException(e);
+            }
+        }, executor);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> updateItemAmount(int itemId, int newAmount) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                Connection conn = getConnection();
+                try {
+                    PreparedStatement stmt = prepareStatement(conn, SQL_UPDATE_AMOUNT);
+                    try {
+                        stmt.setInt(1, newAmount);
+                        stmt.setInt(2, itemId);
+                        return stmt.executeUpdate() > 0;
+                    } finally {
+                        returnStatement(stmt);
+                    }
+                } finally {
+                    releaseConnection(conn);
+                }
+            } catch (Exception e) {
+                logger.log(Level.SEVERE, "Failed to update overflow item amount for id " + itemId, e);
+                return false;
             }
         }, executor);
     }
