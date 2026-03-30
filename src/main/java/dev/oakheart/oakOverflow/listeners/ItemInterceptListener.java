@@ -3,7 +3,7 @@ package dev.oakheart.oakoverflow.listeners;
 import dev.oakheart.oakoverflow.OakOverflow;
 import dev.oakheart.oakoverflow.api.OakOverflowAPI;
 import dev.oakheart.oakoverflow.events.ItemAddedToOverflowEvent;
-import dev.oakheart.oakoverflow.message.MessageManager;
+import dev.oakheart.message.MessageManager;
 import dev.oakheart.oakoverflow.model.OverflowItem;
 import dev.oakheart.oakoverflow.notifications.NotificationManager;
 import dev.oakheart.oakoverflow.config.ConfigManager;

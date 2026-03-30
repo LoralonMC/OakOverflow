@@ -4,22 +4,21 @@ import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.suggestion.SuggestionProvider;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import dev.oakheart.command.CommandRegistrar;
 import dev.oakheart.oakoverflow.OakOverflow;
 import dev.oakheart.oakoverflow.api.OakOverflowAPI;
 import dev.oakheart.oakoverflow.config.ConfigManager;
 import dev.oakheart.oakoverflow.gui.UnclaimedItemsGUI;
-import dev.oakheart.oakoverflow.message.MessageManager;
+import dev.oakheart.message.MessageManager;
 import dev.oakheart.oakoverflow.storage.DataStore;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.plugin.lifecycle.event.LifecycleEventManager;
-import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
 import dev.oakheart.oakoverflow.util.TimeUtil;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
 
 import java.text.DecimalFormat;
 import java.util.*;
@@ -48,11 +47,8 @@ public class AdminCommand {
     }
 
     public void register() {
-        LifecycleEventManager<Plugin> manager = plugin.getLifecycleManager();
-        manager.registerEventHandler(LifecycleEvents.COMMANDS, event -> {
-            Commands commands = event.registrar();
-            commands.register(buildCommand(), "OakOverflow admin commands", List.of("oof", "oa"));
-        });
+        CommandRegistrar.register(plugin, buildCommand(),
+                "OakOverflow admin commands", List.of("oof", "oa"));
     }
 
     /**
@@ -159,29 +155,29 @@ public class AdminCommand {
     // ===== Help =====
 
     private void sendAdminHelp(CommandSender sender) {
-        messages.getMessage("commands.help-header").ifPresent(sender::sendMessage);
+        messages.sendCommand(sender, "help-header");
         if (sender.hasPermission("oakoverflow.admin.view")) {
-            messages.getMessage("commands.help-view").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "help-view");
         }
         if (sender.hasPermission("oakoverflow.admin.clear")) {
-            messages.getMessage("commands.help-clear").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "help-clear");
         }
         if (sender.hasPermission("oakoverflow.admin.clearall")) {
-            messages.getMessage("commands.help-clearall").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "help-clearall");
         }
         if (sender.hasPermission("oakoverflow.admin.stats")) {
-            messages.getMessage("commands.help-stats").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "help-stats");
         }
         if (sender.hasPermission("oakoverflow.admin.reload")) {
-            messages.getMessage("commands.help-reload").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "help-reload");
         }
         if (sender.hasPermission("oakoverflow.admin.purge")) {
-            messages.getMessage("commands.help-purge").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "help-purge");
         }
         if (sender.hasPermission("oakoverflow.admin.migrate")) {
-            messages.getMessage("commands.help-migrate").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "help-migrate");
         }
-        messages.getMessage("commands.help-footer").ifPresent(sender::sendMessage);
+        messages.sendCommand(sender, "help-footer");
     }
 
     // ===== View =====
@@ -205,8 +201,8 @@ public class AdminCommand {
 
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         if (!offlineTarget.hasPlayedBefore()) {
-                            messages.getMessage("commands.player-never-joined", "player", targetName)
-                                    .ifPresent(admin::sendMessage);
+                            messages.sendCommand(admin, "player-never-joined",
+                                    Placeholder.unparsed("player", targetName));
                             return;
                         }
 
@@ -222,8 +218,8 @@ public class AdminCommand {
                 } catch (Exception e) {
                     plugin.getLogger().log(Level.SEVERE, "Failed to look up player " + targetName, e);
                     Bukkit.getScheduler().runTask(plugin, () ->
-                            messages.getMessage("commands.player-not-found", "player", targetName)
-                                    .ifPresent(admin::sendMessage)
+                            messages.sendCommand(admin, "player-not-found",
+                                    Placeholder.unparsed("player", targetName))
                     );
                 }
             });
@@ -247,8 +243,8 @@ public class AdminCommand {
 
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     if (!target.hasPlayedBefore()) {
-                        messages.getMessage("commands.player-not-found", "player", targetName)
-                                .ifPresent(sender::sendMessage);
+                        messages.sendCommand(sender, "player-not-found",
+                                Placeholder.unparsed("player", targetName));
                         return;
                     }
                     executeClear(sender, targetName, target.getUniqueId(), target.getPlayer());
@@ -256,8 +252,8 @@ public class AdminCommand {
             } catch (Exception e) {
                 plugin.getLogger().log(Level.SEVERE, "Failed to look up player " + targetName, e);
                 Bukkit.getScheduler().runTask(plugin, () ->
-                        messages.getMessage("commands.player-not-found", "player", targetName)
-                                .ifPresent(sender::sendMessage)
+                        messages.sendCommand(sender, "player-not-found",
+                                Placeholder.unparsed("player", targetName))
                 );
             }
         });
@@ -267,25 +263,22 @@ public class AdminCommand {
         api.getUnclaimedCount(targetUUID).thenCompose(count -> {
             if (count == 0) {
                 Bukkit.getScheduler().runTask(plugin, () ->
-                        messages.getMessage("commands.no-items-to-clear", "player", targetName)
-                                .ifPresent(sender::sendMessage)
+                        messages.sendCommand(sender, "no-items-to-clear",
+                                Placeholder.unparsed("player", targetName))
                 );
                 return CompletableFuture.completedFuture(0);
             }
 
             return api.clearPlayerItems(targetUUID).thenApply(cleared -> {
                 Bukkit.getScheduler().runTask(plugin, () -> {
-                    Map<String, String> placeholders = new HashMap<>();
-                    placeholders.put("count", String.valueOf(cleared));
-                    placeholders.put("player", targetName);
-                    messages.getMessage("commands.clear-success", placeholders)
-                            .ifPresent(sender::sendMessage);
+                    messages.sendCommand(sender, "clear-success",
+                            Placeholder.unparsed("count", String.valueOf(cleared)),
+                            Placeholder.unparsed("player", targetName));
 
                     plugin.getLogger().info("[ADMIN] " + sender.getName() + " cleared " + cleared + " items for " + targetName);
 
                     if (onlineTarget != null && onlineTarget.isOnline()) {
-                        messages.getMessage("commands.clear-notification")
-                                .ifPresent(onlineTarget::sendMessage);
+                        messages.sendCommand(onlineTarget, "clear-notification");
                     }
                 });
                 return cleared;
@@ -293,7 +286,7 @@ public class AdminCommand {
         }).exceptionally(throwable -> {
             plugin.getLogger().log(Level.SEVERE, "Failed to clear items for " + targetName, throwable);
             Bukkit.getScheduler().runTask(plugin, () ->
-                    messages.getMessage("commands.database-error").ifPresent(sender::sendMessage)
+                    messages.sendCommand(sender, "database-error")
             );
             return null;
         });
@@ -315,7 +308,7 @@ public class AdminCommand {
             } else {
                 consoleConfirmationTime = System.currentTimeMillis();
             }
-            messages.getMessage("commands.clearall-warning").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "clearall-warning");
             return;
         }
 
@@ -323,30 +316,30 @@ public class AdminCommand {
         if (isPlayer) {
             Long confirmTime = clearallConfirmations.get(senderId);
             if (confirmTime == null || System.currentTimeMillis() - confirmTime > CONFIRMATION_TIMEOUT) {
-                messages.getMessage("commands.clearall-confirm-expired").ifPresent(sender::sendMessage);
+                messages.sendCommand(sender, "clearall-confirm-expired");
                 clearallConfirmations.remove(senderId);
                 return;
             }
             clearallConfirmations.remove(senderId);
         } else {
             if (consoleConfirmationTime == 0 || System.currentTimeMillis() - consoleConfirmationTime > CONFIRMATION_TIMEOUT) {
-                messages.getMessage("commands.clearall-confirm-expired").ifPresent(sender::sendMessage);
+                messages.sendCommand(sender, "clearall-confirm-expired");
                 consoleConfirmationTime = 0;
                 return;
             }
             consoleConfirmationTime = 0;
         }
 
-        messages.getMessage("commands.clearall-processing").ifPresent(sender::sendMessage);
+        messages.sendCommand(sender, "clearall-processing");
 
         api.clearAllItems().thenAccept(cleared -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
-                messages.getMessage("commands.clear-all-success", "count", String.valueOf(cleared))
-                        .ifPresent(sender::sendMessage);
+                messages.sendCommand(sender, "clear-all-success",
+                        Placeholder.unparsed("count", String.valueOf(cleared)));
 
                 plugin.getLogger().warning("[ADMIN] " + sender.getName() + " cleared ALL unclaimed items (" + cleared + " total)");
 
-                messages.getMessage("commands.clearall-broadcast").ifPresent(broadcastMsg -> {
+                messages.parse("commands.clearall-broadcast").ifPresent(broadcastMsg -> {
                     for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
                         if (onlinePlayer.hasPermission("oakoverflow.notify")) {
                             onlinePlayer.sendMessage(broadcastMsg);
@@ -357,7 +350,7 @@ public class AdminCommand {
         }).exceptionally(throwable -> {
             plugin.getLogger().log(Level.SEVERE, "Failed to clear all items", throwable);
             Bukkit.getScheduler().runTask(plugin, () ->
-                    messages.getMessage("commands.database-error").ifPresent(sender::sendMessage)
+                    messages.sendCommand(sender, "database-error")
             );
             return null;
         });
@@ -366,32 +359,32 @@ public class AdminCommand {
     // ===== Stats =====
 
     private void handleStats(CommandSender sender) {
-        messages.getMessage("commands.loading-stats").ifPresent(sender::sendMessage);
+        messages.sendCommand(sender, "loading-stats");
 
         api.getStatistics().thenAccept(stats -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 DecimalFormat df = new DecimalFormat("#,###");
                 int claimedItems = stats.totalItems() - stats.unclaimedItems();
 
-                messages.getMessage("commands.stats-header").ifPresent(sender::sendMessage);
-                messages.getMessage("commands.stats-total", "total", df.format(stats.totalItems()))
-                        .ifPresent(sender::sendMessage);
-                messages.getMessage("commands.stats-unclaimed", "unclaimed", df.format(stats.unclaimedItems()))
-                        .ifPresent(sender::sendMessage);
-                messages.getMessage("commands.stats-claimed", "claimed", df.format(claimedItems))
-                        .ifPresent(sender::sendMessage);
-                messages.getMessage("commands.stats-players", "players", df.format(stats.uniquePlayers()))
-                        .ifPresent(sender::sendMessage);
-                messages.getMessage("commands.stats-schema-version", "version", String.valueOf(api.getSchemaVersion()))
-                        .ifPresent(sender::sendMessage);
-                messages.getMessage("commands.stats-oldest", "age", TimeUtil.formatDuration(stats.oldestItemAge()))
-                        .ifPresent(sender::sendMessage);
-                messages.getMessage("commands.stats-footer").ifPresent(sender::sendMessage);
+                messages.sendCommand(sender, "stats-header");
+                messages.sendCommand(sender, "stats-total",
+                        Placeholder.unparsed("total", df.format(stats.totalItems())));
+                messages.sendCommand(sender, "stats-unclaimed",
+                        Placeholder.unparsed("unclaimed", df.format(stats.unclaimedItems())));
+                messages.sendCommand(sender, "stats-claimed",
+                        Placeholder.unparsed("claimed", df.format(claimedItems)));
+                messages.sendCommand(sender, "stats-players",
+                        Placeholder.unparsed("players", df.format(stats.uniquePlayers())));
+                messages.sendCommand(sender, "stats-schema-version",
+                        Placeholder.unparsed("version", String.valueOf(api.getSchemaVersion())));
+                messages.sendCommand(sender, "stats-oldest",
+                        Placeholder.unparsed("age", TimeUtil.formatDuration(stats.oldestItemAge())));
+                messages.sendCommand(sender, "stats-footer");
             });
         }).exceptionally(throwable -> {
             plugin.getLogger().log(Level.SEVERE, "Failed to get statistics", throwable);
             Bukkit.getScheduler().runTask(plugin, () ->
-                    messages.getMessage("commands.database-error").ifPresent(sender::sendMessage)
+                    messages.sendCommand(sender, "database-error")
             );
             return null;
         });
@@ -400,41 +393,41 @@ public class AdminCommand {
     // ===== Reload =====
 
     private void handleReload(CommandSender sender) {
-        messages.getMessage("commands.reload-processing").ifPresent(sender::sendMessage);
+        messages.sendCommand(sender, "reload-processing");
 
         try {
             boolean success = plugin.reloadPluginConfig();
             if (success) {
-                messages.getMessage("commands.reload-success").ifPresent(sender::sendMessage);
+                messages.sendCommand(sender, "reload-success");
                 plugin.getLogger().info("[ADMIN] " + sender.getName() + " reloaded the configuration");
             } else {
-                messages.getMessage("commands.reload-failed").ifPresent(sender::sendMessage);
+                messages.sendCommand(sender, "reload-failed");
             }
         } catch (Exception e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to reload configuration", e);
-            messages.getMessage("commands.reload-failed").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "reload-failed");
         }
     }
 
     // ===== Purge =====
 
     private void handlePurge(CommandSender sender) {
-        messages.getMessage("commands.purge-processing").ifPresent(sender::sendMessage);
+        messages.sendCommand(sender, "purge-processing");
 
         api.purgeCorruptedItems().thenAccept(count -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (count > 0) {
-                    messages.getMessage("commands.purge-success", "count", String.valueOf(count))
-                            .ifPresent(sender::sendMessage);
+                    messages.sendCommand(sender, "purge-success",
+                            Placeholder.unparsed("count", String.valueOf(count)));
                     plugin.getLogger().info("[ADMIN] " + sender.getName() + " purged " + count + " corrupted items");
                 } else {
-                    messages.getMessage("commands.purge-none").ifPresent(sender::sendMessage);
+                    messages.sendCommand(sender, "purge-none");
                 }
             });
         }).exceptionally(throwable -> {
             plugin.getLogger().log(Level.SEVERE, "Failed to purge corrupted items", throwable);
             Bukkit.getScheduler().runTask(plugin, () ->
-                    messages.getMessage("commands.database-error").ifPresent(sender::sendMessage)
+                    messages.sendCommand(sender, "database-error")
             );
             return null;
         });
@@ -453,8 +446,8 @@ public class AdminCommand {
 
         // Check if migrating to same type
         if (currentType.equals(targetType)) {
-            messages.getMessage("commands.migrate-same-type", "type", targetType.toUpperCase())
-                    .ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "migrate-same-type",
+                    Placeholder.unparsed("type", targetType.toUpperCase()));
             return;
         }
 
@@ -464,8 +457,8 @@ public class AdminCommand {
             String database = config.getMysqlDatabase();
             if (host.isBlank() || database.isBlank()
                     || ("localhost".equals(host) && "root".equals(config.getMysqlUsername()) && "password".equals(config.getMysqlPassword()))) {
-                messages.getMessage("commands.migrate-invalid-target", "target", targetType.toUpperCase())
-                        .ifPresent(sender::sendMessage);
+                messages.sendCommand(sender, "migrate-invalid-target",
+                        Placeholder.unparsed("target", targetType.toUpperCase()));
                 return;
             }
         }
@@ -479,11 +472,9 @@ public class AdminCommand {
             } else {
                 consoleMigrationRequest = new MigrationRequest(targetType, System.currentTimeMillis());
             }
-            Map<String, String> placeholders = new HashMap<>();
-            placeholders.put("source", currentType.toUpperCase());
-            placeholders.put("target", targetType.toUpperCase());
-            messages.getMessage("commands.migrate-warning", placeholders)
-                    .ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "migrate-warning",
+                    Placeholder.unparsed("source", currentType.toUpperCase()),
+                    Placeholder.unparsed("target", targetType.toUpperCase()));
             return;
         }
 
@@ -498,7 +489,7 @@ public class AdminCommand {
 
         if (request == null || !request.targetType().equals(targetType)
                 || System.currentTimeMillis() - request.timestamp() > CONFIRMATION_TIMEOUT) {
-            messages.getMessage("commands.migrate-confirm-expired").ifPresent(sender::sendMessage);
+            messages.sendCommand(sender, "migrate-confirm-expired");
             return;
         }
 
@@ -506,7 +497,7 @@ public class AdminCommand {
     }
 
     private void executeMigration(CommandSender sender, String sourceType, String targetType) {
-        messages.getMessage("commands.migrate-started").ifPresent(sender::sendMessage);
+        messages.sendCommand(sender, "migrate-started");
 
         // Close all open GUIs first
         UnclaimedItemsGUI.closeAll();
@@ -528,8 +519,8 @@ public class AdminCommand {
                 DataStore finalTargetStore = targetStore;
 
                 Bukkit.getScheduler().runTask(plugin, () ->
-                        messages.getMessage("commands.migrate-progress", "count", String.valueOf(totalItems))
-                                .ifPresent(sender::sendMessage)
+                        messages.sendCommand(sender, "migrate-progress",
+                                Placeholder.unparsed("count", String.valueOf(totalItems)))
                 );
 
                 // Import to target
@@ -544,11 +535,9 @@ public class AdminCommand {
                     config.setDatabaseType(targetType);
                     oldStore.close();
 
-                    Map<String, String> placeholders = new HashMap<>();
-                    placeholders.put("count", String.valueOf(imported));
-                    placeholders.put("target", targetType.toUpperCase());
-                    messages.getMessage("commands.migrate-success", placeholders)
-                            .ifPresent(sender::sendMessage);
+                    messages.sendCommand(sender, "migrate-success",
+                            Placeholder.unparsed("count", String.valueOf(imported)),
+                            Placeholder.unparsed("target", targetType.toUpperCase()));
 
                     plugin.getLogger().info("[ADMIN] " + sender.getName() + " migrated " + imported +
                             " items from " + sourceType.toUpperCase() + " to " + targetType.toUpperCase());
@@ -560,7 +549,7 @@ public class AdminCommand {
                     targetStore.close();
                 }
                 Bukkit.getScheduler().runTask(plugin, () ->
-                        messages.getMessage("commands.migrate-failed").ifPresent(sender::sendMessage)
+                        messages.sendCommand(sender, "migrate-failed")
                 );
             }
         });

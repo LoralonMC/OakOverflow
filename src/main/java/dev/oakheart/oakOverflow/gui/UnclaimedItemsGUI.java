@@ -6,12 +6,10 @@ import dev.oakheart.oakoverflow.model.OverflowItem;
 import dev.oakheart.oakoverflow.events.ItemClaimedEvent;
 import dev.oakheart.oakoverflow.config.ConfigManager;
 import dev.oakheart.oakoverflow.managers.ClaimManager;
-import dev.oakheart.oakoverflow.message.MessageManager;
+import dev.oakheart.message.MessageManager;
 import dev.oakheart.oakoverflow.util.InventoryHelper;
 import dev.oakheart.oakoverflow.util.ItemNameUtil;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import net.kyori.adventure.text.minimessage.tag.resolver.TagResolver;
 import org.bukkit.Bukkit;
@@ -130,7 +128,8 @@ public class UnclaimedItemsGUI implements InventoryHolder {
 
                 if (items.isEmpty()) {
                     if (viewOnly) {
-                        messages.getMessage("gui.admin-view-empty", "player", targetName)
+                        messages.parse("gui.admin-view-empty",
+                                Placeholder.unparsed("player", targetName))
                                 .ifPresent(viewer::sendMessage);
                     } else {
                         messages.send(viewer, "no-unclaimed-items");
@@ -159,7 +158,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         }).exceptionally(throwable -> {
             plugin.getLogger().severe("Failed to load unclaimed items for GUI: " + throwable.getMessage());
             Bukkit.getScheduler().runTask(plugin, () ->
-                    messages.getMessage("commands.database-error").ifPresent(viewer::sendMessage)
+                    messages.sendCommand(viewer, "database-error")
             );
             return null;
         });
@@ -173,14 +172,10 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         Component title;
         if (viewOnly && !viewer.getUniqueId().equals(targetUUID)) {
             // Admin viewing another player's items
-            MiniMessage mm = messages.getMiniMessage();
-            String rawTitle = messages.getRawMessage("gui.admin-view-title");
-            String prefix = messages.getRawPrefix();
-            title = mm.deserialize(rawTitle,
-                    TagResolver.resolver(
-                            Placeholder.parsed("prefix", prefix),
-                            Placeholder.unparsed("player", targetName)
-                    ));
+            String rawTitle = messages.getMessageText("gui.admin-view-title");
+            title = rawTitle != null
+                    ? messages.deserialize(rawTitle, Placeholder.unparsed("player", targetName))
+                    : config.getGuiTitle();
         } else {
             title = config.getGuiTitle();
         }
@@ -219,12 +214,12 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         // Append configurable lore: admin view uses admin-item-lore, player view uses player-item-lore
         String loreKey = viewOnly ? "gui.admin-item-lore" : "gui.player-item-lore";
 
-        Map<String, String> placeholders = new HashMap<>();
-        placeholders.put("amount", String.valueOf(overflowItem.getAmount()));
-        placeholders.put("source", overflowItem.getSource());
-        placeholders.put("age", overflowItem.getAgeString());
+        TagResolver resolvers = TagResolver.resolver(
+                Placeholder.unparsed("amount", String.valueOf(overflowItem.getAmount())),
+                Placeholder.unparsed("source", overflowItem.getSource()),
+                Placeholder.unparsed("age", overflowItem.getAgeString()));
 
-        List<Component> extraLore = messages.getMessageList(loreKey, placeholders);
+        List<Component> extraLore = deserializeStringList(loreKey, resolvers);
 
         if (!extraLore.isEmpty()) {
             ItemMeta meta = displayItem.getItemMeta();
@@ -240,7 +235,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
                 }
                 combinedLore.addAll(extraLore);
 
-                meta.lore(noItalic(combinedLore));
+                meta.lore(combinedLore);
                 displayItem.setItemMeta(meta);
             }
         }
@@ -256,16 +251,17 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         ItemStack barrier = new ItemStack(Material.BARRIER);
         ItemMeta meta = barrier.getItemMeta();
         if (meta != null) {
-            messages.getMessage("gui.corrupted-item-name")
-                    .map(UnclaimedItemsGUI::noItalic)
-                    .ifPresent(meta::displayName);
+            String nameText = messages.getMessageText("gui.corrupted-item-name");
+            if (nameText != null && !nameText.isEmpty()) {
+                meta.displayName(messages.deserialize(nameText));
+            }
 
-            Map<String, String> placeholders = new HashMap<>();
-            placeholders.put("id", String.valueOf(overflowItem.getId()));
-            placeholders.put("source", overflowItem.getSource());
-            placeholders.put("age", overflowItem.getAgeString());
+            TagResolver resolvers = TagResolver.resolver(
+                    Placeholder.unparsed("id", String.valueOf(overflowItem.getId())),
+                    Placeholder.unparsed("source", overflowItem.getSource()),
+                    Placeholder.unparsed("age", overflowItem.getAgeString()));
 
-            meta.lore(noItalic(messages.getMessageList("gui.corrupted-item-lore", placeholders)));
+            meta.lore(deserializeStringList("gui.corrupted-item-lore", resolvers));
             barrier.setItemMeta(meta);
         }
         return barrier;
@@ -280,13 +276,15 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             ItemStack prevButton = new ItemStack(config.getPreviousPageMaterial());
             ItemMeta meta = prevButton.getItemMeta();
             if (meta != null) {
-                Map<String, String> placeholders = new HashMap<>();
-                placeholders.put("current", String.valueOf(currentPage + 1));
-                placeholders.put("total", String.valueOf(totalPages));
+                TagResolver resolvers = TagResolver.resolver(
+                        Placeholder.unparsed("current", String.valueOf(currentPage + 1)),
+                        Placeholder.unparsed("total", String.valueOf(totalPages)));
 
-                meta.displayName(noItalic(messages.getMessage("gui.previous-page-button.name")
-                        .orElse(Component.empty())));
-                meta.lore(noItalic(messages.getMessageList("gui.previous-page-button.lore", placeholders)));
+                String nameText = messages.getMessageText("gui.previous-page-button-name");
+                if (nameText != null) {
+                    meta.displayName(messages.deserialize(nameText));
+                }
+                meta.lore(deserializeStringList("gui.previous-page-button-lore", resolvers));
                 prevButton.setItemMeta(meta);
             }
             inventory.setItem(previousPageSlot, prevButton);
@@ -297,13 +295,15 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             ItemStack sortButton = new ItemStack(config.getSortButtonMaterial());
             ItemMeta meta = sortButton.getItemMeta();
             if (meta != null) {
-                String modeLabel = messages.getRawMessage(getSortModeMessageKey());
-                Map<String, String> placeholders = new HashMap<>();
-                placeholders.put("mode", modeLabel);
+                String modeLabel = messages.getMessageText(getSortModeMessageKey());
+                TagResolver resolvers = TagResolver.resolver(
+                        Placeholder.unparsed("mode", modeLabel != null ? modeLabel : ""));
 
-                meta.displayName(noItalic(messages.getMessage("gui.sort-button-name")
-                        .orElse(Component.empty())));
-                meta.lore(noItalic(messages.getMessageList("gui.sort-button-lore", placeholders)));
+                String nameText = messages.getMessageText("gui.sort-button-name");
+                if (nameText != null) {
+                    meta.displayName(messages.deserialize(nameText));
+                }
+                meta.lore(deserializeStringList("gui.sort-button-lore", resolvers));
                 sortButton.setItemMeta(meta);
             }
             inventory.setItem(sortSlot, sortButton);
@@ -318,14 +318,16 @@ public class UnclaimedItemsGUI implements InventoryHolder {
                 int max = config.getMaxItemsPerPlayer();
                 int percentage = max > 0 ? Math.min(100, (count * 100) / max) : 0;
 
-                Map<String, String> placeholders = new HashMap<>();
-                placeholders.put("count", String.valueOf(count));
-                placeholders.put("max", String.valueOf(max));
-                placeholders.put("percentage", String.valueOf(percentage));
+                TagResolver resolvers = TagResolver.resolver(
+                        Placeholder.unparsed("count", String.valueOf(count)),
+                        Placeholder.unparsed("max", String.valueOf(max)),
+                        Placeholder.unparsed("percentage", String.valueOf(percentage)));
 
-                meta.displayName(noItalic(messages.getMessage("gui.capacity-indicator-name", placeholders)
-                        .orElse(Component.empty())));
-                meta.lore(noItalic(messages.getMessageList("gui.capacity-indicator-lore", placeholders)));
+                String nameText = messages.getMessageText("gui.capacity-indicator-name");
+                if (nameText != null) {
+                    meta.displayName(messages.deserialize(nameText, resolvers));
+                }
+                meta.lore(deserializeStringList("gui.capacity-indicator-lore", resolvers));
                 capacityItem.setItemMeta(meta);
             }
             inventory.setItem(capacitySlot, capacityItem);
@@ -336,12 +338,14 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             ItemStack claimAllButton = new ItemStack(config.getClaimAllMaterial());
             ItemMeta meta = claimAllButton.getItemMeta();
             if (meta != null) {
-                Map<String, String> placeholders = new HashMap<>();
-                placeholders.put("count", String.valueOf(items.size()));
+                TagResolver resolvers = TagResolver.resolver(
+                        Placeholder.unparsed("count", String.valueOf(items.size())));
 
-                meta.displayName(noItalic(messages.getMessage("gui.claim-all-button.name")
-                        .orElse(Component.empty())));
-                meta.lore(noItalic(messages.getMessageList("gui.claim-all-button.lore", placeholders)));
+                String nameText = messages.getMessageText("gui.claim-all-button-name");
+                if (nameText != null) {
+                    meta.displayName(messages.deserialize(nameText));
+                }
+                meta.lore(deserializeStringList("gui.claim-all-button-lore", resolvers));
                 claimAllButton.setItemMeta(meta);
             }
             inventory.setItem(claimAllSlot, claimAllButton);
@@ -350,11 +354,14 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             ItemStack infoButton = new ItemStack(config.getViewOnlyMaterial());
             ItemMeta meta = infoButton.getItemMeta();
             if (meta != null) {
-                Map<String, String> placeholders = new HashMap<>();
-                placeholders.put("player", targetName);
-                meta.displayName(noItalic(messages.getMessage("gui.view-only-button-name")
-                        .orElse(Component.empty())));
-                meta.lore(noItalic(messages.getMessageList("gui.view-only-button-lore", placeholders)));
+                TagResolver resolvers = TagResolver.resolver(
+                        Placeholder.unparsed("player", targetName));
+
+                String nameText = messages.getMessageText("gui.view-only-button-name");
+                if (nameText != null) {
+                    meta.displayName(messages.deserialize(nameText));
+                }
+                meta.lore(deserializeStringList("gui.view-only-button-lore", resolvers));
                 infoButton.setItemMeta(meta);
             }
             inventory.setItem(claimAllSlot, infoButton);
@@ -365,13 +372,15 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             ItemStack nextButton = new ItemStack(config.getNextPageMaterial());
             ItemMeta meta = nextButton.getItemMeta();
             if (meta != null) {
-                Map<String, String> placeholders = new HashMap<>();
-                placeholders.put("current", String.valueOf(currentPage + 1));
-                placeholders.put("total", String.valueOf(totalPages));
+                TagResolver resolvers = TagResolver.resolver(
+                        Placeholder.unparsed("current", String.valueOf(currentPage + 1)),
+                        Placeholder.unparsed("total", String.valueOf(totalPages)));
 
-                meta.displayName(noItalic(messages.getMessage("gui.next-page-button.name")
-                        .orElse(Component.empty())));
-                meta.lore(noItalic(messages.getMessageList("gui.next-page-button.lore", placeholders)));
+                String nameText = messages.getMessageText("gui.next-page-button-name");
+                if (nameText != null) {
+                    meta.displayName(messages.deserialize(nameText));
+                }
+                meta.lore(deserializeStringList("gui.next-page-button-lore", resolvers));
                 nextButton.setItemMeta(meta);
             }
             inventory.setItem(nextPageSlot, nextButton);
@@ -385,8 +394,10 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         ItemStack filler = new ItemStack(config.getFillerMaterial());
         ItemMeta meta = filler.getItemMeta();
         if (meta != null) {
-            meta.displayName(noItalic(messages.getMessage("gui.filler-item.name")
-                    .orElse(Component.empty())));
+            String nameText = messages.getMessageText("gui.filler-item-name");
+            if (nameText != null) {
+                meta.displayName(messages.deserialize(nameText));
+            }
             filler.setItemMeta(meta);
         }
 
@@ -430,7 +441,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
 
         // View-only mode blocks all non-navigation clicks
         if (viewOnly) {
-            messages.getMessage("gui.view-only-denied").ifPresent(viewer::sendMessage);
+            messages.parse("gui.view-only-denied").ifPresent(viewer::sendMessage);
             return;
         }
 
@@ -465,7 +476,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
     private void claimItem(OverflowItem item) {
         // Block claiming of corrupted items
         if (item.isCorrupted()) {
-            messages.getMessage("commands.corrupted-item").ifPresent(viewer::sendMessage);
+            messages.sendCommand(viewer, "corrupted-item");
             return;
         }
 
@@ -490,7 +501,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         api.markAsClaimed(item.getId(), item.getPlayerUUID()).thenAccept(success -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!success) {
-                    messages.getMessage("commands.database-error").ifPresent(viewer::sendMessage);
+                    messages.sendCommand(viewer, "database-error");
                     return;
                 }
 
@@ -508,10 +519,9 @@ public class UnclaimedItemsGUI implements InventoryHolder {
                 items.remove(item);
 
                 // Send success message (reuse itemStack instead of cloning again)
-                Map<String, String> placeholders = new HashMap<>();
-                placeholders.put("amount", String.valueOf(item.getAmount()));
-                placeholders.put("item", ItemNameUtil.getItemDisplayName(itemStack));
-                messages.send(viewer, "claim-success", placeholders);
+                messages.send(viewer, "claim-success",
+                        Placeholder.unparsed("amount", String.valueOf(item.getAmount())),
+                        Placeholder.unparsed("item", ItemNameUtil.getItemDisplayName(itemStack)));
 
                 // Play sound
                 if (config.areGuiSoundsEnabled()) {
@@ -529,7 +539,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         }).exceptionally(throwable -> {
             plugin.getLogger().severe("Failed to claim item: " + throwable.getMessage());
             Bukkit.getScheduler().runTask(plugin, () ->
-                    messages.getMessage("commands.database-error").ifPresent(viewer::sendMessage)
+                    messages.sendCommand(viewer, "database-error")
             );
             return null;
         });
@@ -608,17 +618,16 @@ public class UnclaimedItemsGUI implements InventoryHolder {
     }
 
     /**
-     * Strips the default italic decoration that Minecraft applies to custom item text.
+     * Reads a string list from messages.yml config and deserializes each line
+     * using the library's MessageManager (which suppresses italic for item lore).
      */
-    private static Component noItalic(Component component) {
-        return component.decoration(TextDecoration.ITALIC, false);
-    }
-
-    /**
-     * Strips default italic from every component in a lore list.
-     */
-    private static List<Component> noItalic(List<Component> lore) {
-        return lore.stream().map(UnclaimedItemsGUI::noItalic).toList();
+    private List<Component> deserializeStringList(String key, TagResolver resolvers) {
+        List<String> lines = messages.getConfig().getStringList(key);
+        List<Component> result = new ArrayList<>(lines.size());
+        for (String line : lines) {
+            result.add(messages.deserialize(line, resolvers));
+        }
+        return result;
     }
 
     /**

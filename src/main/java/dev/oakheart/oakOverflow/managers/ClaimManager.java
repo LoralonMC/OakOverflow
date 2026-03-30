@@ -5,8 +5,9 @@ import dev.oakheart.oakoverflow.api.OakOverflowAPI;
 import dev.oakheart.oakoverflow.config.ConfigManager;
 import dev.oakheart.oakoverflow.events.ItemClaimedEvent;
 import dev.oakheart.oakoverflow.events.ItemsClaimedAllEvent;
-import dev.oakheart.oakoverflow.message.MessageManager;
+import dev.oakheart.message.MessageManager;
 import dev.oakheart.oakoverflow.model.OverflowItem;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -14,7 +15,6 @@ import org.bukkit.inventory.ItemStack;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.logging.Level;
 
@@ -76,7 +76,7 @@ public class ClaimManager {
         api.markAsClaimedBatch(player.getUniqueId(), itemIds).thenAccept(markedCount -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (markedCount <= 0) {
-                    messages.getMessage("commands.database-error").ifPresent(player::sendMessage);
+                    messages.sendCommand(player, "database-error");
                     result.complete(List.of());
                     return;
                 }
@@ -104,12 +104,12 @@ public class ClaimManager {
                 Bukkit.getPluginManager().callEvent(claimAllEvent);
 
                 if (returnedEntries > 0) {
-                    Map<String, String> placeholders = new HashMap<>();
-                    placeholders.put("claimed", String.valueOf(fullyClaimed.size()));
-                    placeholders.put("returned", String.valueOf(returnedEntries));
-                    messages.send(player, "claim-all-partial", placeholders);
+                    messages.send(player, "claim-all-partial",
+                            Placeholder.unparsed("claimed", String.valueOf(fullyClaimed.size())),
+                            Placeholder.unparsed("returned", String.valueOf(returnedEntries)));
                 } else {
-                    messages.send(player, "claim-all-success", "count", String.valueOf(fullyClaimed.size()));
+                    messages.send(player, "claim-all-success",
+                            Placeholder.unparsed("count", String.valueOf(fullyClaimed.size())));
                 }
 
                 if (config.areGuiSoundsEnabled()) {
@@ -121,7 +121,7 @@ public class ClaimManager {
         }).exceptionally(throwable -> {
             plugin.getLogger().log(Level.SEVERE, "Failed to batch claim items", throwable);
             Bukkit.getScheduler().runTask(plugin, () -> {
-                messages.getMessage("commands.database-error").ifPresent(player::sendMessage);
+                messages.sendCommand(player, "database-error");
                 result.complete(List.of());
             });
             return null;

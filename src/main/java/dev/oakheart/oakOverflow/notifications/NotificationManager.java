@@ -4,7 +4,8 @@ import dev.oakheart.oakoverflow.OakOverflow;
 import dev.oakheart.oakoverflow.api.OakOverflowAPI;
 import dev.oakheart.oakoverflow.config.ConfigManager;
 import dev.oakheart.oakoverflow.gui.UnclaimedItemsGUI;
-import dev.oakheart.oakoverflow.message.MessageManager;
+import dev.oakheart.message.MessageManager;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,8 +15,6 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.scheduler.BukkitTask;
 
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -151,10 +150,9 @@ public class NotificationManager implements Listener {
                         int delay = config.getJoinNotificationDelay() + 40; // 2 seconds after join notification
                         Bukkit.getScheduler().runTaskLater(plugin, () -> {
                             if (player.isOnline()) {
-                                Map<String, String> placeholders = new HashMap<>();
-                                placeholders.put("count", String.valueOf(expiringCount));
-                                placeholders.put("days", String.valueOf(warningDays));
-                                messages.send(player, "expiry-warning", placeholders);
+                                messages.send(player, "expiry-warning",
+                                        Placeholder.unparsed("count", String.valueOf(expiringCount)),
+                                        Placeholder.unparsed("days", String.valueOf(warningDays)));
                             }
                         }, delay);
                     }
@@ -167,11 +165,12 @@ public class NotificationManager implements Listener {
     }
 
     /**
-     * Sends join notification to player. The MiniMessage template in config
+     * Sends join notification to player. The MiniMessage template in messages.yml
      * already contains click/hover events, so no programmatic wrapping needed.
      */
     private void sendJoinNotification(Player player, int count) {
-        messages.send(player, "join-notification", "count", String.valueOf(count));
+        messages.send(player, "join-notification",
+                Placeholder.unparsed("count", String.valueOf(count)));
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -209,12 +208,10 @@ public class NotificationManager implements Listener {
             return;
         }
 
-        Map<String, String> placeholders = new HashMap<>();
-        placeholders.put("item", itemName);
-        placeholders.put("amount", String.valueOf(amount));
-        placeholders.put("source", source);
-
-        messages.send(player, "item-received", placeholders);
+        messages.send(player, "item-received",
+                Placeholder.unparsed("item", itemName),
+                Placeholder.unparsed("amount", String.valueOf(amount)),
+                Placeholder.unparsed("source", source));
     }
 
     // ========================================
@@ -239,7 +236,8 @@ public class NotificationManager implements Listener {
 
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (player.isOnline()) {
-                    messages.send(player, "action-bar-unclaimed", "count", String.valueOf(count));
+                    messages.send(player, "action-bar-unclaimed",
+                            Placeholder.unparsed("count", String.valueOf(count)));
                 }
             });
         });

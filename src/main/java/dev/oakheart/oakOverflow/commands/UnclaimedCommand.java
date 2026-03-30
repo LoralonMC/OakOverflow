@@ -2,19 +2,18 @@ package dev.oakheart.oakoverflow.commands;
 
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.tree.LiteralCommandNode;
+import dev.oakheart.command.CommandRegistrar;
 import dev.oakheart.oakoverflow.OakOverflow;
 import dev.oakheart.oakoverflow.api.OakOverflowAPI;
 import dev.oakheart.oakoverflow.config.ConfigManager;
 import dev.oakheart.oakoverflow.gui.UnclaimedItemsGUI;
 import dev.oakheart.oakoverflow.managers.ClaimManager;
-import dev.oakheart.oakoverflow.message.MessageManager;
+import dev.oakheart.message.MessageManager;
 import io.papermc.paper.command.brigadier.CommandSourceStack;
 import io.papermc.paper.command.brigadier.Commands;
-import io.papermc.paper.plugin.lifecycle.event.LifecycleEventManager;
-import io.papermc.paper.plugin.lifecycle.event.types.LifecycleEvents;
+import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.plugin.Plugin;
 
 import java.util.List;
 import java.util.logging.Level;
@@ -38,11 +37,8 @@ public class UnclaimedCommand {
     }
 
     public void register() {
-        LifecycleEventManager<Plugin> manager = plugin.getLifecycleManager();
-        manager.registerEventHandler(LifecycleEvents.COMMANDS, event -> {
-            Commands commands = event.registrar();
-            commands.register(buildCommand(), "Manage your overflow storage items", List.of("of", "unclaimed", "uc"));
-        });
+        CommandRegistrar.register(plugin, buildCommand(),
+                "Manage your overflow storage items", List.of("of", "unclaimed", "uc"));
     }
 
     private LiteralCommandNode<CommandSourceStack> buildCommand() {
@@ -82,11 +78,11 @@ public class UnclaimedCommand {
     }
 
     private void sendHelp(Player player) {
-        messages.getMessage("commands.player-help-header").ifPresent(player::sendMessage);
-        messages.getMessage("commands.player-help-open").ifPresent(player::sendMessage);
-        messages.getMessage("commands.player-help-count").ifPresent(player::sendMessage);
-        messages.getMessage("commands.player-help-claimall").ifPresent(player::sendMessage);
-        messages.getMessage("commands.player-help-footer").ifPresent(player::sendMessage);
+        messages.sendCommand(player, "player-help-header");
+        messages.sendCommand(player, "player-help-open");
+        messages.sendCommand(player, "player-help-count");
+        messages.sendCommand(player, "player-help-claimall");
+        messages.sendCommand(player, "player-help-footer");
     }
 
     private void openGUI(Player player) {
@@ -100,13 +96,14 @@ public class UnclaimedCommand {
                 if (count == 0) {
                     messages.send(player, "no-unclaimed-items");
                 } else {
-                    messages.send(player, "items-count", "count", String.valueOf(count));
+                    messages.send(player, "items-count",
+                            Placeholder.unparsed("count", String.valueOf(count)));
                 }
             });
         }).exceptionally(throwable -> {
             plugin.getLogger().log(Level.SEVERE, "Failed to get unclaimed count for " + player.getName(), throwable);
             Bukkit.getScheduler().runTask(plugin, () ->
-                    messages.getMessage("commands.database-error").ifPresent(player::sendMessage)
+                    messages.sendCommand(player, "database-error")
             );
             return null;
         });
@@ -125,7 +122,7 @@ public class UnclaimedCommand {
         }).exceptionally(throwable -> {
             plugin.getLogger().log(Level.SEVERE, "Failed to get unclaimed items for claimall", throwable);
             Bukkit.getScheduler().runTask(plugin, () ->
-                    messages.getMessage("commands.database-error").ifPresent(player::sendMessage)
+                    messages.sendCommand(player, "database-error")
             );
             return null;
         });

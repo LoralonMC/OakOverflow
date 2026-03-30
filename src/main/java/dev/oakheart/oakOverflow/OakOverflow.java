@@ -8,13 +8,14 @@ import dev.oakheart.oakoverflow.config.ConfigManager;
 import dev.oakheart.oakoverflow.listeners.ItemInterceptListener;
 import dev.oakheart.oakoverflow.listeners.PhoenixCratesListener;
 import dev.oakheart.oakoverflow.managers.ClaimManager;
-import dev.oakheart.oakoverflow.message.MessageManager;
+import dev.oakheart.message.MessageManager;
 import dev.oakheart.oakoverflow.notifications.NotificationManager;
 import dev.oakheart.oakoverflow.storage.DataStore;
 import dev.oakheart.oakoverflow.storage.MySQLDatabase;
 import dev.oakheart.oakoverflow.storage.SQLiteDatabase;
 import dev.oakheart.oakoverflow.gui.GUIListener;
 import dev.oakheart.oakoverflow.gui.UnclaimedItemsGUI;
+import dev.oakheart.util.DebugLogger;
 import org.bstats.bukkit.Metrics;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -34,6 +35,7 @@ public final class OakOverflow extends JavaPlugin {
     private ClaimManager claimManager;
     private ItemInterceptListener itemInterceptListener;
     private NotificationManager notificationManager;
+    private DebugLogger debugLogger;
 
     private BukkitTask autoCleanupTask;
     private BukkitTask cacheCleanupTask;
@@ -94,9 +96,12 @@ public final class OakOverflow extends JavaPlugin {
         configManager = new ConfigManager(this);
         configManager.load();
 
+        // Debug logger
+        debugLogger = new DebugLogger(getLogger(), configManager::isDebugMode);
+
         // Messages
-        messageManager = new MessageManager(this);
-        messageManager.setConfig(configManager.getConfig());
+        messageManager = new MessageManager(this, getLogger());
+        messageManager.load();
 
         // Database
         initializeDatabase();
@@ -280,8 +285,8 @@ public final class OakOverflow extends JavaPlugin {
      * @param message the debug message to log
      */
     public void debug(String message) {
-        if (configManager != null && configManager.isDebugMode()) {
-            getLogger().info("[DEBUG] " + message);
+        if (debugLogger != null) {
+            debugLogger.log(message);
         }
     }
 
@@ -290,7 +295,7 @@ public final class OakOverflow extends JavaPlugin {
             UnclaimedItemsGUI.closeAll();
             boolean success = configManager.reload();
             if (success) {
-                messageManager.setConfig(configManager.getConfig());
+                messageManager.reload();
                 api.clearCache();
                 api.getCountCache().refreshConfig();
 

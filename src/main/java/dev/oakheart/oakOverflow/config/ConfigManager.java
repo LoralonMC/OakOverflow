@@ -4,13 +4,9 @@ import dev.oakheart.oakoverflow.OakOverflow;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
-import org.bukkit.configuration.file.FileConfiguration;
-import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Level;
@@ -19,7 +15,7 @@ import java.util.logging.Logger;
 /**
  * Manages plugin configuration: loading, validation, merging defaults, and
  * type-safe access to all config values. Message resolution is handled by
- * {@link dev.oakheart.oakoverflow.message.MessageManager}.
+ * {@link dev.oakheart.message.MessageManager}.
  */
 public class ConfigManager {
 
@@ -27,7 +23,7 @@ public class ConfigManager {
     private final Logger logger;
     private final File configFile;
 
-    private FileConfiguration config;
+    private dev.oakheart.config.ConfigManager config;
 
     // Cached hot-path values
     private double interceptionRadius;
@@ -68,8 +64,12 @@ public class ConfigManager {
         if (!configFile.exists()) {
             plugin.saveResource("config.yml", false);
         }
-        this.config = YamlConfiguration.loadConfiguration(configFile);
-        mergeDefaults(this.config);
+        try {
+            this.config = dev.oakheart.config.ConfigManager.load(configFile.toPath());
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to load config.yml", e);
+        }
+        mergeDefaults();
         validate(this.config);
         cacheValues();
     }
@@ -80,62 +80,55 @@ public class ConfigManager {
      * @return true if reload was successful
      */
     public boolean reload() {
-        FileConfiguration newConfig = YamlConfiguration.loadConfiguration(configFile);
-        mergeDefaults(newConfig);
+        try {
+            dev.oakheart.config.ConfigManager newConfig = dev.oakheart.config.ConfigManager.load(configFile.toPath());
+            mergeDefaults(newConfig);
 
-        if (!validate(newConfig)) {
-            logger.warning("Configuration reload failed validation. Keeping previous configuration.");
+            if (!validate(newConfig)) {
+                logger.warning("Configuration reload failed validation. Keeping previous configuration.");
+                return false;
+            }
+
+            this.config = newConfig;
+            cacheValues();
+            logger.info("Configuration reloaded successfully.");
+            return true;
+        } catch (IOException e) {
+            logger.log(Level.WARNING, "Failed to reload config.yml", e);
             return false;
         }
-
-        this.config = newConfig;
-        cacheValues();
-        logger.info("Configuration reloaded successfully.");
-        return true;
     }
 
     /**
-     * Returns the underlying FileConfiguration for MessageManager to read from.
+     * Returns the underlying config for direct access.
      */
-    public FileConfiguration getConfig() {
+    public dev.oakheart.config.ConfigManager getConfig() {
         return config;
     }
 
     /**
-     * Merges default config values from the JAR resource into the given config.
-     * Only saves if new keys are found, avoiding SnakeYAML reformatting.
-     *
-     * @param target the configuration to merge defaults into
+     * Merges default config values from the JAR resource into the current config.
      */
-    private void mergeDefaults(FileConfiguration target) {
-        try (InputStreamReader reader = new InputStreamReader(
-                plugin.getResource("config.yml"), StandardCharsets.UTF_8)) {
-            FileConfiguration defaults = YamlConfiguration.loadConfiguration(reader);
-            target.setDefaults(defaults);
-
-            if (hasNewKeys(target, defaults)) {
-                target.options().copyDefaults(true);
-                target.save(configFile);
-                logger.info("Merged missing config keys from defaults.");
-            }
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "Failed to merge default config", e);
-        }
+    private void mergeDefaults() {
+        mergeDefaults(this.config);
     }
 
     /**
-     * Checks if the defaults contain any keys not present in the given config.
+     * Merges default config values from the JAR resource into the given config.
+     * Only saves if new keys are found, avoiding reformatting.
      */
-    private boolean hasNewKeys(FileConfiguration target, FileConfiguration defaults) {
-        for (String key : defaults.getKeys(true)) {
-            if (defaults.isConfigurationSection(key)) {
-                continue;
+    private void mergeDefaults(dev.oakheart.config.ConfigManager target) {
+        try (var stream = plugin.getResource("config.yml")) {
+            if (stream != null) {
+                var defaults = dev.oakheart.config.ConfigManager.fromStream(stream);
+                if (target.mergeDefaults(defaults)) {
+                    target.save();
+                    logger.info("Merged missing config keys from defaults.");
+                }
             }
-            if (!target.contains(key, true)) {
-                return true;
-            }
+        } catch (IOException e) {
+            logger.log(Level.WARNING, "Failed to merge default config", e);
         }
-        return false;
     }
 
     /**
@@ -144,7 +137,7 @@ public class ConfigManager {
      * @param configToValidate the configuration to validate
      * @return true if no fatal errors were found
      */
-    private boolean validate(FileConfiguration configToValidate) {
+    private boolean validate(dev.oakheart.config.ConfigManager configToValidate) {
         List<String> warnings = new ArrayList<>();
         boolean hasFatalError = false;
 
@@ -215,7 +208,7 @@ public class ConfigManager {
     /**
      * Validates a sound string follows the namespace:path format.
      */
-    private void validateSound(FileConfiguration configToValidate, String path, List<String> warnings) {
+    private void validateSound(dev.oakheart.config.ConfigManager configToValidate, String path, List<String> warnings) {
         String sound = configToValidate.getString(path, "");
         if (!sound.isEmpty() && !sound.contains(":")) {
             warnings.add(path + " should use namespace:path format (e.g. 'minecraft:block.chest.open'), got: " + sound);
@@ -436,40 +429,14 @@ public class ConfigManager {
 
     /**
      * Updates the database type in the config file using targeted line replacement
-     * to avoid SnakeYAML reformatting.
+     * via the library's ConfigManager to avoid reformatting.
      */
     public void setDatabaseType(String type) {
         config.set("database.type", type.toUpperCase());
-
         try {
-            List<String> lines = Files.readAllLines(configFile.toPath(), StandardCharsets.UTF_8);
-            boolean found = false;
-            for (int i = 0; i < lines.size(); i++) {
-                String trimmed = lines.get(i).trim();
-                if (trimmed.startsWith("type:") && i > 0 && lines.get(i - 1).trim().startsWith("# Database type")) {
-                    lines.set(i, "  type: " + type.toUpperCase());
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                // Fallback: search for "type: SQLITE" or "type: MYSQL" under database section
-                for (int i = 0; i < lines.size(); i++) {
-                    String trimmed = lines.get(i).trim();
-                    if (trimmed.matches("type:\\s*(SQLITE|MYSQL)")) {
-                        lines.set(i, "  type: " + type.toUpperCase());
-                        found = true;
-                        break;
-                    }
-                }
-            }
-            if (found) {
-                Files.write(configFile.toPath(), lines, StandardCharsets.UTF_8);
-            } else {
-                logger.warning("Could not find database.type line in config.yml for targeted replacement");
-            }
-        } catch (Exception e) {
-            logger.log(Level.WARNING, "Failed to update database type in config file", e);
+            config.save();
+        } catch (IOException e) {
+            logger.log(Level.WARNING, "Failed to save database type to config file", e);
         }
     }
 

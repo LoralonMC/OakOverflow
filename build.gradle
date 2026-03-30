@@ -7,6 +7,7 @@ group = 'dev.oakheart'
 version = '1.0.0'
 
 repositories {
+    mavenLocal()
     mavenCentral()
     maven {
         name = "papermc-repo"
@@ -22,6 +23,7 @@ dependencies {
     compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
     compileOnly("me.clip:placeholderapi:2.11.6")
     compileOnly(fileTree(dir: 'libs', include: ['*.jar'])) // PhoenixCratesPro API (not on Maven Central)
+    implementation("dev.oakheart:oakheart-core:1.1.0")
     implementation("org.bstats:bstats-bukkit:3.1.0")
     compileOnly("org.xerial:sqlite-jdbc:3.47.1.0")
     compileOnly("com.mysql:mysql-connector-j:9.1.0")
@@ -50,6 +52,10 @@ processResources {
 shadowJar {
     archiveClassifier.set('')
     relocate("org.bstats", "dev.oakheart.oakoverflow.bstats")
+    relocate("dev.oakheart.config", "dev.oakheart.oakoverflow.libs.config")
+    relocate("dev.oakheart.message", "dev.oakheart.oakoverflow.libs.message")
+    relocate("dev.oakheart.command", "dev.oakheart.oakoverflow.libs.command")
+    relocate("dev.oakheart.util", "dev.oakheart.oakoverflow.libs.util")
 }
 
 jar {

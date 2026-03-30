@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Migrate to OakheartLib shared library for config management (ConfigManager), message handling (MessageManager), command registration (CommandRegistrar), and debug logging (DebugLogger)
+- Messages moved from config.yml to dedicated messages.yml (auto-migration on first load)
+- Prefix `<prefix>` tag replaced with baked-in prefix text in all message templates
+- GUI messages flattened from nested name/lore structure to flat keys (e.g. `gui.claim-all-button.name` becomes `gui.claim-all-button-name`)
+
 - MySQL SSL config now uses `ssl-mode` (DISABLED/PREFERRED/REQUIRED/VERIFY_CA/VERIFY_IDENTITY) instead of legacy `use-ssl`/`verify-certificate` properties for MySQL Connector/J 9.x compatibility
 - Removed `useUnicode` from default MySQL connection properties (handled automatically by modern Connector/J)
 - PlaceholderAPI expansion now depends on the API interface instead of the implementation class
