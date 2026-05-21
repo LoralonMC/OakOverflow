@@ -20,10 +20,10 @@ repositories {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:1.21.10-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
     compileOnly("me.clip:placeholderapi:2.11.6")
     compileOnly(fileTree(dir: 'libs', include: ['*.jar'])) // PhoenixCratesPro API (not on Maven Central)
-    implementation("dev.oakheart:oakheart-core:1.1.0")
+    implementation("dev.oakheart:oakheart-core:1.2.0")
     implementation("org.bstats:bstats-bukkit:3.1.0")
     compileOnly("org.xerial:sqlite-jdbc:3.47.1.0")
     compileOnly("com.mysql:mysql-connector-j:9.1.0")
@@ -31,12 +31,12 @@ dependencies {
 }
 
 java {
-    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    toolchain.languageVersion = JavaLanguageVersion.of(25)
 }
 
 compileJava {
     options.encoding = 'UTF-8'
-    options.release = 21
+    options.release = 25
     options.compilerArgs += ['-Xlint:deprecation', '-Xlint:unchecked']
 }
 
