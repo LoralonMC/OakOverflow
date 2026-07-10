@@ -33,50 +33,18 @@ public class OakOverflowAPIImpl implements OakOverflowAPI {
     @Override
     public CompletableFuture<OverflowItem> addOverflowItem(UUID playerUUID, String playerName,
                                                              ItemStack item, int amount, String source) {
-        // Try to merge with existing unclaimed items of the same type, respecting max stack size
-        return dataStore.getUnclaimedItems(playerUUID).thenCompose(existingItems -> {
-            int remaining = amount;
-            int maxStack = item.getMaxStackSize();
-            CompletableFuture<OverflowItem> lastResult = null;
-
-            for (OverflowItem existing : existingItems) {
-                if (remaining <= 0) break;
-                if (existing.isCorrupted() || !existing.getItem().isSimilar(item)) continue;
-                if (existing.getAmount() >= maxStack) continue; // Already full
-
-                int space = maxStack - existing.getAmount();
-                int toAdd = Math.min(remaining, space);
-                int newAmount = existing.getAmount() + toAdd;
-                remaining -= toAdd;
-
-                final int finalNewAmount = newAmount;
-                lastResult = dataStore.updateItemAmount(existing.getId(), newAmount)
-                        .thenApply(success -> {
-                            countCache.invalidate(playerUUID);
-                            if (success) {
-                                return new OverflowItem(existing.getId(), playerUUID, playerName,
-                                        item, finalNewAmount, existing.getReceivedTimestamp(),
-                                        existing.getSource(), false, null);
-                            }
-                            return existing;
-                        });
-            }
-
-            // Insert new entry for any remainder that didn't fit
-            if (remaining > 0) {
-                final int insertAmount = remaining;
-                CompletableFuture<OverflowItem> insertFuture =
-                        dataStore.addOverflowItem(playerUUID, playerName, item, insertAmount, source)
-                                .thenApply(overflowItem -> {
-                                    countCache.invalidate(playerUUID);
-                                    return overflowItem;
-                                });
-                lastResult = insertFuture;
-            }
-
-            return lastResult != null ? lastResult
-                    : CompletableFuture.completedFuture(null);
-        });
+        // Insert-only, deliberately no merging into existing rows. The old
+        // read-then-write merge raced three ways: a concurrent claim silently
+        // swallowed the merged amount (updateItemAmount guards on claimed = 0 and
+        // the failure was ignored), two concurrent adds overwrote each other's
+        // totals, and an open GUI held the pre-merge amount which claimItem then
+        // gave out while marking the whole row claimed. One row per add is
+        // race-free; stack-style presentation is a GUI concern, not storage.
+        return dataStore.addOverflowItem(playerUUID, playerName, item, amount, source)
+                .thenApply(overflowItem -> {
+                    countCache.invalidate(playerUUID);
+                    return overflowItem;
+                });
     }
 
     @Override
@@ -147,6 +115,16 @@ public class OakOverflowAPIImpl implements OakOverflowAPI {
                 countCache.invalidate(playerUUID);
             }
             return count;
+        });
+    }
+
+    @Override
+    public CompletableFuture<List<Integer>> markAsClaimedBatchReturningIds(UUID playerUUID, List<Integer> itemIds) {
+        return dataStore.markAsClaimedBatchReturningIds(playerUUID, itemIds).thenApply(marked -> {
+            if (!marked.isEmpty()) {
+                countCache.invalidate(playerUUID);
+            }
+            return marked;
         });
     }
 

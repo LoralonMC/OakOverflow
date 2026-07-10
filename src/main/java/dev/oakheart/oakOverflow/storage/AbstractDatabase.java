@@ -417,6 +417,47 @@ public abstract class AbstractDatabase implements DataStore {
     }
 
     @Override
+    public CompletableFuture<List<Integer>> markAsClaimedBatchReturningIds(UUID playerUUID, List<Integer> itemIds) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            return CompletableFuture.completedFuture(List.of());
+        }
+
+        return CompletableFuture.supplyAsync(() -> {
+            List<Integer> marked = new ArrayList<>();
+            try {
+                Connection conn = getConnection();
+                try {
+                    // One UPDATE per id (same guarded statement as the single-claim
+                    // path) so each row reports whether it was still unclaimed. An
+                    // IN(...) update only yields a total and cannot say which rows
+                    // a racing single-claim already took.
+                    PreparedStatement stmt = prepareStatement(conn, SQL_MARK_CLAIMED);
+                    try {
+                        long now = System.currentTimeMillis();
+                        for (int itemId : itemIds) {
+                            stmt.setLong(1, now);
+                            stmt.setInt(2, itemId);
+                            stmt.setString(3, playerUUID.toString());
+                            if (stmt.executeUpdate() > 0) {
+                                marked.add(itemId);
+                            }
+                        }
+                    } finally {
+                        returnStatement(stmt);
+                    }
+                } finally {
+                    releaseConnection(conn);
+                }
+            } catch (SQLException e) {
+                // Rows marked before the failure are still returned so the caller
+                // gives them out; crash semantics stay "loss, never duplication".
+                logger.log(Level.SEVERE, "Failed to batch mark items as claimed (per-id)", e);
+            }
+            return marked;
+        }, executor);
+    }
+
+    @Override
     public CompletableFuture<Integer> markAsClaimedBatch(UUID playerUUID, List<Integer> itemIds) {
         if (itemIds == null || itemIds.isEmpty()) {
             return CompletableFuture.completedFuture(0);

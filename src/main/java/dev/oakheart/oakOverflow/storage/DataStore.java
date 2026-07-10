@@ -36,6 +36,14 @@ public interface DataStore {
 
     CompletableFuture<Integer> markAsClaimedBatch(UUID playerUUID, List<Integer> itemIds);
 
+    /**
+     * Marks each item as claimed individually and returns the IDs that were
+     * actually marked (rows that were still unclaimed). Callers giving out items
+     * must use this instead of {@link #markAsClaimedBatch} so an item whose row
+     * was already claimed by a racing single-claim is not given a second time.
+     */
+    CompletableFuture<List<Integer>> markAsClaimedBatchReturningIds(UUID playerUUID, List<Integer> itemIds);
+
     CompletableFuture<Integer> clearPlayerItems(UUID playerUUID);
 
     CompletableFuture<Integer> clearAllItems();

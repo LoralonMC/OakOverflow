@@ -49,6 +49,13 @@ public interface OakOverflowAPI {
 
     CompletableFuture<Integer> markAsClaimedBatch(UUID playerUUID, List<Integer> itemIds);
 
+    /**
+     * Marks each item as claimed individually and returns the IDs that were
+     * actually marked. Use this when the caller hands out items afterwards:
+     * the count-only batch variant cannot say which rows were already claimed.
+     */
+    CompletableFuture<List<Integer>> markAsClaimedBatchReturningIds(UUID playerUUID, List<Integer> itemIds);
+
     CompletableFuture<Integer> clearPlayerItems(UUID playerUUID);
 
     CompletableFuture<Integer> clearAllItems();

@@ -73,19 +73,28 @@ public class ClaimManager {
 
         // Mark as claimed first to prevent duplication on crash.
         // Crash between mark and give = item loss (preferred over duplication).
-        api.markAsClaimedBatch(player.getUniqueId(), itemIds).thenAccept(markedCount -> {
+        // The per-id variant reports exactly which rows this call claimed: a row
+        // taken by a racing single-claim (its give is already in flight) must not
+        // be given again here, or clicking an item and then Claim All within one
+        // DB roundtrip duplicates it.
+        api.markAsClaimedBatchReturningIds(player.getUniqueId(), itemIds).thenAccept(markedIds -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
-                if (markedCount <= 0) {
+                if (markedIds.isEmpty()) {
                     messages.sendCommand(player, "database-error");
                     result.complete(List.of());
                     return;
                 }
+
+                java.util.Set<Integer> markedSet = new java.util.HashSet<>(markedIds);
 
                 // Track which items were fully claimed vs re-overflowed
                 List<OverflowItem> fullyClaimed = new ArrayList<>();
                 int returnedEntries = 0;
 
                 for (OverflowItem item : itemsToClaim) {
+                    if (!markedSet.contains(item.getId())) {
+                        continue;
+                    }
                     ItemStack itemStack = item.getItem();
                     itemStack.setAmount(item.getAmount());
 
