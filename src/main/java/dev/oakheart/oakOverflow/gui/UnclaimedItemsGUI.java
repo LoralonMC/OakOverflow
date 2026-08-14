@@ -3,7 +3,6 @@ package dev.oakheart.oakoverflow.gui;
 import dev.oakheart.oakoverflow.OakOverflow;
 import dev.oakheart.oakoverflow.api.OakOverflowAPI;
 import dev.oakheart.oakoverflow.model.OverflowItem;
-import dev.oakheart.oakoverflow.events.ItemClaimedEvent;
 import dev.oakheart.oakoverflow.config.ConfigManager;
 import dev.oakheart.oakoverflow.managers.ClaimManager;
 import dev.oakheart.message.MessageManager;
@@ -60,9 +59,57 @@ public class UnclaimedItemsGUI implements InventoryHolder {
     private Inventory inventory;
     // Only accessed from the main thread (via runTask callbacks)
     private List<OverflowItem> items;
+    // Display view of `items`: identical stackable rows collapsed into one slot
+    private List<ItemEntry> entries;
     private int currentPage;
     private int totalPages;
     private SortMode currentSortMode;
+
+    /**
+     * One slot in the GUI. Storage keeps a separate row per item received (that
+     * insert-only design is what makes concurrent adds and claims race-free), so
+     * a player who picks up 300 emeralds with a full inventory owns 300 rows.
+     * Showing those as 300 slots is unusable, so identical rows are gathered and
+     * repacked into full stack-sized slots that read exactly like a chest.
+     *
+     * <p>Slots are filled to the stack size regardless of where row boundaries
+     * fall, so a slot can hold part of a row and {@link #total} always equals the
+     * rendered amount. That is what makes the layout dense and honest, and it's
+     * why claiming works in slices.
+     *
+     * @param display the stack as rendered
+     * @param total   combined amount in this slot, always equal to the rendered amount
+     * @param slices  the row portions making up this slot, newest first
+     */
+    private record ItemEntry(ItemStack display, int total, List<ClaimManager.RowSlice> slices) {
+        boolean isCorrupted() {
+            return slices.get(0).row().isCorrupted();
+        }
+
+        String source() {
+            return slices.get(0).row().getSource();
+        }
+
+        OverflowItem firstRow() {
+            return slices.get(0).row();
+        }
+
+        long newestTimestamp() {
+            long newest = Long.MIN_VALUE;
+            for (ClaimManager.RowSlice slice : slices) {
+                newest = Math.max(newest, slice.row().getReceivedTimestamp());
+            }
+            return newest;
+        }
+
+        long oldestTimestamp() {
+            long oldest = Long.MAX_VALUE;
+            for (ClaimManager.RowSlice slice : slices) {
+                oldest = Math.min(oldest, slice.row().getReceivedTimestamp());
+            }
+            return oldest;
+        }
+    }
 
     /**
      * Creates a GUI for a player to view and claim their own items.
@@ -101,6 +148,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         this.viewOnly = viewOnly;
         this.currentPage = 0;
         this.items = new ArrayList<>();
+        this.entries = new ArrayList<>();
         this.currentSortMode = playerSortPreferences.getOrDefault(viewer.getUniqueId(), SortMode.NEWEST_FIRST);
 
         int guiSize = config.getGuiSize();
@@ -137,12 +185,12 @@ public class UnclaimedItemsGUI implements InventoryHolder {
                     return;
                 }
 
-                // Sort items according to current preference
-                sortItems();
+                // Collapse identical rows into display entries, then sort
+                rebuildEntries();
 
                 // Calculate pages
                 int itemsPerPage = config.getItemsPerPage();
-                this.totalPages = (int) Math.ceil((double) items.size() / itemsPerPage);
+                this.totalPages = Math.max(1, (int) Math.ceil((double) entries.size() / itemsPerPage));
 
                 // Create and open inventory
                 buildInventory();
@@ -181,16 +229,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         }
         inventory = Bukkit.createInventory(this, config.getGuiSize(), title);
 
-        // Add items for current page
-        int itemsPerPage = config.getItemsPerPage();
-        int startIndex = currentPage * itemsPerPage;
-        int endIndex = Math.min(startIndex + itemsPerPage, items.size());
-
-        for (int i = startIndex; i < endIndex; i++) {
-            OverflowItem overflowItem = items.get(i);
-            ItemStack displayItem = createDisplayItem(overflowItem);
-            inventory.setItem(i - startIndex, displayItem);
-        }
+        renderPage();
 
         // Add navigation buttons
         addNavigationButtons();
@@ -203,23 +242,23 @@ public class UnclaimedItemsGUI implements InventoryHolder {
      * Creates a display ItemStack for an OverflowItem.
      * Corrupted items are shown as a BARRIER block with red lore.
      */
-    private ItemStack createDisplayItem(OverflowItem overflowItem) {
-        if (overflowItem.isCorrupted()) {
-            return createCorruptedDisplayItem(overflowItem);
+    private ItemStack createDisplayItem(ItemEntry entry) {
+        if (entry.isCorrupted()) {
+            return createCorruptedDisplayItem(entry.firstRow());
         }
 
-        ItemStack displayItem = overflowItem.getItem(); // getItem() already returns a clone
-        displayItem.setAmount(overflowItem.getAmount());
+        ItemStack displayItem = entry.display().clone();
 
         // Append configurable lore: admin view uses admin-item-lore, player view uses player-item-lore
         String loreKey = viewOnly ? "gui.admin-item-lore" : "gui.player-item-lore";
 
         TagResolver resolvers = TagResolver.resolver(
-                Placeholder.unparsed("amount", String.valueOf(overflowItem.getAmount())),
-                Placeholder.unparsed("source", overflowItem.getSource()),
-                Placeholder.unparsed("age", overflowItem.getAgeString()));
+                Placeholder.unparsed("amount", String.valueOf(entry.total())),
+                Placeholder.unparsed("stacks", String.valueOf(entry.slices().size())),
+                Placeholder.unparsed("source", entry.source()),
+                Placeholder.unparsed("age", entry.firstRow().getAgeString()));
 
-        List<Component> extraLore = deserializeStringList(loreKey, resolvers);
+        List<Component> extraLore = new ArrayList<>(deserializeStringList(loreKey, resolvers));
 
         if (!extraLore.isEmpty()) {
             ItemMeta meta = displayItem.getItemMeta();
@@ -314,7 +353,8 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             ItemStack capacityItem = new ItemStack(config.getCapacityIndicatorMaterial());
             ItemMeta meta = capacityItem.getItemMeta();
             if (meta != null) {
-                int count = items.size();
+                // max-items-per-player counts items, so the indicator must too
+                int count = totalItemCount();
                 int max = config.getMaxItemsPerPlayer();
                 int percentage = max > 0 ? Math.min(100, (count * 100) / max) : 0;
 
@@ -339,7 +379,8 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             ItemMeta meta = claimAllButton.getItemMeta();
             if (meta != null) {
                 TagResolver resolvers = TagResolver.resolver(
-                        Placeholder.unparsed("count", String.valueOf(items.size())));
+                        Placeholder.unparsed("count", String.valueOf(totalItemCount())),
+                        Placeholder.unparsed("stacks", String.valueOf(entries.size())));
 
                 String nameText = messages.getMessageText("gui.claim-all-button-name");
                 if (nameText != null) {
@@ -433,7 +474,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             currentSortMode = currentSortMode.next();
             playerSortPreferences.put(viewer.getUniqueId(), currentSortMode);
             currentPage = 0;
-            sortItems();
+            rebuildEntries();
             refresh();
             playNavigationSound();
             return;
@@ -457,96 +498,54 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             return;
         }
 
-        int itemIndex = currentPage * itemsPerPage + slot;
-        if (itemIndex >= items.size()) {
+        int entryIndex = currentPage * itemsPerPage + slot;
+        if (entryIndex >= entries.size()) {
             return;
         }
 
-        OverflowItem item = items.get(itemIndex);
-
         if (leftClick) {
-            claimItem(item);
+            claimEntry(entries.get(entryIndex));
         }
     }
 
     /**
-     * Claims a single item by checking space, marking it as claimed in the database,
-     * then giving it to the player. This prevents item duplication.
+     * Claims a whole display entry: every storage row behind that slot, in order,
+     * for as much as the player's inventory can hold. A stack too big to fit at once
+     * is claimed partially and the remainder stays in overflow.
      */
-    private void claimItem(OverflowItem item) {
+    private void claimEntry(ItemEntry entry) {
         // Block claiming of corrupted items
-        if (item.isCorrupted()) {
+        if (entry.isCorrupted()) {
             messages.sendCommand(viewer, "corrupted-item");
             return;
         }
 
-        // Fire claim event
-        ItemClaimedEvent event = new ItemClaimedEvent(viewer, item);
-        Bukkit.getPluginManager().callEvent(event);
+        String itemName = ItemNameUtil.getItemDisplayName(entry.display());
 
-        if (event.isCancelled()) {
-            return;
-        }
-
-        // Check if player has inventory space BEFORE marking as claimed
-        ItemStack itemStack = item.getItem(); // getItem() already returns a clone
-        itemStack.setAmount(item.getAmount());
-
-        if (!InventoryHelper.hasSpace(viewer, itemStack, item.getAmount())) {
-            messages.send(viewer, "claim-failed-full");
-            return;
-        }
-
-        // Mark as claimed in database FIRST to prevent duplication
-        api.markAsClaimed(item.getId(), item.getPlayerUUID()).thenAccept(success -> {
+        claimManager.claim(viewer, entry.slices()).thenAccept(result -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
-                if (!success) {
-                    messages.sendCommand(viewer, "database-error");
+                if (!viewer.isOnline()) return;
+
+                if (result.isEmpty()) {
+                    messages.send(viewer, "claim-failed-full");
                     return;
                 }
 
-                // Now give the item to the player
-                HashMap<Integer, ItemStack> leftover = viewer.getInventory().addItem(itemStack);
-                if (!leftover.isEmpty()) {
-                    // Inventory changed between check and give (rare) - re-add to overflow
-                    for (ItemStack left : leftover.values()) {
-                        api.addOverflowItem(viewer, left, left.getAmount(), item.getSource());
-                    }
-                }
-
-                // Always remove original from local list — it's marked claimed in DB.
-                // Re-overflowed items are new DB entries that appear on next refresh.
-                items.remove(item);
-
-                // Send success message (reuse itemStack instead of cloning again)
                 messages.send(viewer, "claim-success",
-                        Placeholder.unparsed("amount", String.valueOf(item.getAmount())),
-                        Placeholder.unparsed("item", ItemNameUtil.getItemDisplayName(itemStack)));
+                        Placeholder.unparsed("amount", String.valueOf(result.claimedAmount())),
+                        Placeholder.unparsed("item", itemName));
 
-                // Play sound
                 if (config.areGuiSoundsEnabled()) {
                     viewer.playSound(viewer.getLocation(), config.getClaimSound(), 1.0f, 1.0f);
                 }
 
-                // Close or refresh GUI
-                if (items.isEmpty()) {
-                    viewer.closeInventory();
-                    messages.send(viewer, "no-unclaimed-items");
-                } else {
-                    refresh();
-                }
+                afterClaim();
             });
-        }).exceptionally(throwable -> {
-            plugin.getLogger().severe("Failed to claim item: " + throwable.getMessage());
-            Bukkit.getScheduler().runTask(plugin, () ->
-                    messages.sendCommand(viewer, "database-error")
-            );
-            return null;
         });
     }
 
     /**
-     * Handles claiming all items via ClaimManager, then refreshes the GUI.
+     * Handles claiming everything via ClaimManager, then refreshes the GUI.
      */
     private void handleClaimAll() {
         if (items.isEmpty()) {
@@ -554,24 +553,69 @@ public class UnclaimedItemsGUI implements InventoryHolder {
             return;
         }
 
-        // Early exit if inventory is completely full — avoids claim/re-overflow churn
+        // Early exit if the inventory can't take anything. ClaimManager would reach
+        // the same conclusion, but this saves the round trip
         if (InventoryHelper.isFull(viewer.getInventory())) {
             messages.send(viewer, "claim-failed-full");
             return;
         }
 
-        claimManager.claimAll(viewer, items).thenAccept(claimedItems -> {
+        // Claim in the order shown, so what the player sees at the top goes first
+        List<ClaimManager.RowSlice> ordered = new ArrayList<>();
+        for (ItemEntry entry : entries) {
+            ordered.addAll(entry.slices());
+        }
+
+        claimManager.claimAllSlices(viewer, ordered).thenAccept(result -> {
             Bukkit.getScheduler().runTask(plugin, () -> {
                 if (!viewer.isOnline()) return;
-                items.removeAll(claimedItems);
+                afterClaim();
+            });
+        });
+    }
 
+    /**
+     * Total items on display, across every entry. Matches what the unclaimed count
+     * and max-items-per-player measure.
+     */
+    private int totalItemCount() {
+        int total = 0;
+        for (ItemEntry entry : entries) {
+            total += entry.total();
+        }
+        return total;
+    }
+
+    /**
+     * Reloads from storage after a claim and redraws, closing the GUI once nothing
+     * is left.
+     * <p>
+     * A claim can consume a row and write part of it back as a new row, so the local
+     * list can't be patched by removing what was claimed. Re-reading is the only way
+     * to learn the write-back's identity, and it also picks up anything that landed in
+     * overflow while the GUI was open. {@link ClaimManager#claim} only completes once
+     * its write-backs have committed, so this never races them.
+     */
+    private void afterClaim() {
+        api.getUnclaimedItems(targetUUID).thenAccept(loaded -> {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (!viewer.isOnline()) return;
+
+                this.items = new ArrayList<>(loaded);
                 if (items.isEmpty()) {
                     viewer.closeInventory();
                     messages.send(viewer, "no-unclaimed-items");
-                } else {
-                    refresh();
+                    return;
                 }
+                rebuildEntries();
+                refresh();
             });
+        }).exceptionally(throwable -> {
+            plugin.getLogger().log(java.util.logging.Level.SEVERE,
+                    "Failed to reload overflow items after a claim for " + viewer.getName(), throwable);
+            Bukkit.getScheduler().runTask(plugin, () ->
+                    messages.sendCommand(viewer, "database-error"));
+            return null;
         });
     }
 
@@ -583,7 +627,7 @@ public class UnclaimedItemsGUI implements InventoryHolder {
     private void refresh() {
         // Recalculate pages
         int itemsPerPage = config.getItemsPerPage();
-        this.totalPages = Math.max(1, (int) Math.ceil((double) items.size() / itemsPerPage));
+        this.totalPages = Math.max(1, (int) Math.ceil((double) entries.size() / itemsPerPage));
 
         // Ensure current page is valid
         if (currentPage >= totalPages) {
@@ -593,19 +637,24 @@ public class UnclaimedItemsGUI implements InventoryHolder {
         // Update inventory contents in-place (no flicker)
         inventory.clear();
 
-        // Add items for current page
-        int startIndex = currentPage * itemsPerPage;
-        int endIndex = Math.min(startIndex + itemsPerPage, items.size());
-
-        for (int i = startIndex; i < endIndex; i++) {
-            OverflowItem overflowItem = items.get(i);
-            ItemStack displayItem = createDisplayItem(overflowItem);
-            inventory.setItem(i - startIndex, displayItem);
-        }
+        renderPage();
 
         // Re-add navigation and filler
         addNavigationButtons();
         fillEmptySlots();
+    }
+
+    /**
+     * Draws the current page's entries into the item slots.
+     */
+    private void renderPage() {
+        int itemsPerPage = config.getItemsPerPage();
+        int startIndex = currentPage * itemsPerPage;
+        int endIndex = Math.min(startIndex + itemsPerPage, entries.size());
+
+        for (int i = startIndex; i < endIndex; i++) {
+            inventory.setItem(i - startIndex, createDisplayItem(entries.get(i)));
+        }
     }
 
     /**
@@ -631,17 +680,146 @@ public class UnclaimedItemsGUI implements InventoryHolder {
     }
 
     /**
-     * Sorts the items list according to the current sort mode.
+     * Rebuilds the display entries from the current row list, collapsing identical
+     * rows into one entry each, then sorts the entries by the active sort mode.
+     *
+     * <p>Rows group on item <i>and</i> source, so every lore field an entry shows
+     * (source, and sorting by it) stays true of every row behind it. The grouping
+     * key is a clone normalised to amount 1: {@code ItemStack} equality includes
+     * the amount, while the items are otherwise identical, so normalising is what
+     * makes "same item, different stack size" land in the same bucket.
+     *
+     * <p>Corrupted rows can't be compared (they have no ItemStack) and each stay
+     * their own entry.
      */
-    private void sortItems() {
-        Comparator<OverflowItem> comparator = switch (currentSortMode) {
-            case NEWEST_FIRST -> Comparator.comparingLong(OverflowItem::getReceivedTimestamp).reversed();
-            case OLDEST_FIRST -> Comparator.comparingLong(OverflowItem::getReceivedTimestamp);
-            case BY_TYPE -> Comparator.comparingInt((OverflowItem item) -> item.isCorrupted() ? 1 : 0)
-                    .thenComparing(item -> item.isCorrupted() ? "" : item.getItem().getType().name());
-            case BY_SOURCE -> Comparator.comparing(OverflowItem::getSource, String.CASE_INSENSITIVE_ORDER);
+    private void rebuildEntries() {
+        // Bucket by material first (cheap and exact), then compare within the bucket
+        // with isSimilar. Going straight to a hash map keyed on ItemStack would lean on
+        // ItemMeta hashCode agreeing across implementations for every custom item on the
+        // server; isSimilar is the comparison Bukkit itself uses for stacking, and the
+        // material bucket keeps it from becoming an O(n²) scan.
+        Map<Material, List<OpenGroup>> buckets = new LinkedHashMap<>();
+        List<ItemEntry> rebuilt = new ArrayList<>();
+
+        for (OverflowItem row : items) {
+            if (row.isCorrupted()) {
+                rebuilt.add(new ItemEntry(null, row.getAmount(),
+                        List.of(new ClaimManager.RowSlice(row, row.getAmount()))));
+                continue;
+            }
+
+            ItemStack normalised = row.getItem();
+            normalised.setAmount(1);
+
+            List<OpenGroup> bucket = buckets.computeIfAbsent(normalised.getType(), k -> new ArrayList<>());
+            OpenGroup match = null;
+            for (OpenGroup candidate : bucket) {
+                if (candidate.item.isSimilar(normalised) && candidate.source.equals(row.getSource())) {
+                    match = candidate;
+                    break;
+                }
+            }
+            if (match == null) {
+                match = new OpenGroup(normalised, row.getSource());
+                bucket.add(match);
+            }
+            match.rows.add(row);
+            match.total += row.getAmount();
+        }
+
+        for (List<OpenGroup> bucket : buckets.values()) {
+            for (OpenGroup group : bucket) {
+                packIntoStacks(group, rebuilt);
+            }
+        }
+
+        rebuilt.sort(entryComparator());
+        this.entries = rebuilt;
+    }
+
+    /**
+     * Packs a group's rows into full stack-sized display entries, so the GUI reads
+     * exactly like a chest: 300 emeralds are 64/64/64/64/44 across five slots, and every
+     * slot shows its own true count.
+     *
+     * <p>Slots are filled to the stack size without regard for row boundaries, so a row
+     * can straddle two slots: three rows of 40 lay out as 64 + 56, with the middle row
+     * split 24/16 between them. Each slot therefore carries slices rather than whole
+     * rows, and {@link ClaimManager#claim} writes back whatever part of a consumed row
+     * the player didn't take.
+     *
+     * <p>Rows arrive capped at one stack (the API splits larger grants on write), but
+     * this handles an oversized legacy row correctly anyway: it simply spans as many
+     * slots as it needs.
+     */
+    private void packIntoStacks(OpenGroup group, List<ItemEntry> out) {
+        int maxStack = Math.max(1, group.item.getMaxStackSize());
+        List<ClaimManager.RowSlice> current = new ArrayList<>();
+        int currentTotal = 0;
+
+        for (OverflowItem row : group.rows) {
+            int unplaced = row.getAmount();
+            while (unplaced > 0) {
+                int take = Math.min(unplaced, maxStack - currentTotal);
+                if (take <= 0) {
+                    break; // unreachable: a slot is flushed the moment it fills
+                }
+                current.add(new ClaimManager.RowSlice(row, take));
+                currentTotal += take;
+                unplaced -= take;
+
+                if (currentTotal >= maxStack) {
+                    out.add(entryOf(group.item, currentTotal, current));
+                    current = new ArrayList<>();
+                    currentTotal = 0;
+                }
+            }
+        }
+
+        if (!current.isEmpty()) {
+            out.add(entryOf(group.item, currentTotal, current));
+        }
+    }
+
+    /**
+     * Builds a display entry. Packing never overfills a slot, so the rendered amount
+     * is the slot's true content.
+     */
+    private ItemEntry entryOf(ItemStack prototype, int total, List<ClaimManager.RowSlice> slices) {
+        ItemStack display = prototype.clone();
+        display.setAmount(Math.max(1, Math.min(total, display.getMaxStackSize())));
+        return new ItemEntry(display, total, List.copyOf(slices));
+    }
+
+    /**
+     * Mutable accumulator used only while grouping.
+     */
+    private static final class OpenGroup {
+        private final ItemStack item;
+        private final String source;
+        private final List<OverflowItem> rows = new ArrayList<>();
+        private int total;
+
+        private OpenGroup(ItemStack item, String source) {
+            this.item = item;
+            this.source = source;
+        }
+    }
+
+    /**
+     * Comparator for display entries under the active sort mode. Corrupted entries
+     * always sort last so a broken row never heads the list.
+     */
+    private Comparator<ItemEntry> entryComparator() {
+        Comparator<ItemEntry> corruptedLast = Comparator.comparingInt(entry -> entry.isCorrupted() ? 1 : 0);
+        return switch (currentSortMode) {
+            case NEWEST_FIRST -> corruptedLast.thenComparing(
+                    Comparator.comparingLong(ItemEntry::newestTimestamp).reversed());
+            case OLDEST_FIRST -> corruptedLast.thenComparingLong(ItemEntry::oldestTimestamp);
+            case BY_TYPE -> corruptedLast.thenComparing(
+                    entry -> entry.isCorrupted() ? "" : entry.display().getType().name());
+            case BY_SOURCE -> corruptedLast.thenComparing(ItemEntry::source, String.CASE_INSENSITIVE_ORDER);
         };
-        items.sort(comparator);
     }
 
     /**
@@ -692,6 +870,12 @@ public class UnclaimedItemsGUI implements InventoryHolder {
 
     @Override
     public @NotNull Inventory getInventory() {
+        if (inventory == null) {
+            // Contract is @NotNull, but the inventory isn't built until the async item
+            // load returns. Hand back an empty one rather than an NPE if anything asks
+            // in that window.
+            inventory = Bukkit.createInventory(this, config.getGuiSize(), config.getGuiTitle());
+        }
         return inventory;
     }
 }

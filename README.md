@@ -5,7 +5,8 @@ Smart inventory overflow storage system for Paper servers. When a player's inven
 ## Features
 
 - Automatic interception of plugin/command-spawned items when inventory is full
-- GUI-based item claiming with pagination, sorting, and sound effects
+- Rescue of items the server would otherwise destroy when a protection plugin blocks a drop
+- GUI-based item claiming with stacking, pagination, sorting, and sound effects
 - Join notifications with clickable claim links
 - Action bar reminders for unclaimed items
 - Item expiry warnings when auto-deletion is approaching
@@ -17,8 +18,8 @@ Smart inventory overflow storage system for Paper servers. When a player's inven
 
 ## Requirements
 
-- Paper 1.21.10+
-- Java 21+
+- Paper 26.1.2+
+- Java 25+
 
 ## Installation
 
@@ -52,7 +53,7 @@ Smart inventory overflow storage system for Paper servers. When a player's inven
 | `oakoverflow.use` | Access basic overflow features | Everyone |
 | `oakoverflow.notify` | Receive item notifications | Everyone |
 | `oakoverflow.bypass` | Items always go to inventory | false |
-| `oakoverflow.bypass.limits` | Bypass max items limit | OP |
+| `oakoverflow.bypass.limits` | Bypass max items limit | false |
 | `oakoverflow.admin.*` | All admin permissions | OP |
 | `oakoverflow.admin` | Base admin permission | OP |
 | `oakoverflow.admin.view` | View other players' items | OP |
@@ -69,6 +70,7 @@ Smart inventory overflow storage system for Paper servers. When a player's inven
 Key settings in `config.yml`:
 
 - **Performance**: Interception radius and ambiguity threshold for multi-player scenarios
+- **Drop rescue**: Catch items the server deletes when a protection plugin blocks a drop
 - **Limits**: Max items per player, auto-delete after X days
 - **Notifications**: Join notifications, receive notifications, action bar updates, expiry warnings
 - **GUI**: Size, items per page, sorting, capacity indicator, sounds
@@ -76,6 +78,26 @@ Key settings in `config.yml`:
 - **Messages**: All player-facing messages are customizable with MiniMessage formatting
 
 See the generated `config.yml` for full documentation of all options.
+
+## Stacking
+
+Storage writes one row per item received. That insert-only design is deliberate: merging into an existing row means read-then-write, which races against concurrent adds and claims and can duplicate or swallow items.
+
+Stacking is therefore a display concern. The GUI gathers entries holding the same item from the same source and repacks them into full stack-sized slots, so it reads exactly like a chest: a player who picks up 300 emeralds with a full inventory sees 64/64/64/64/44 across five slots, not 300. Every slot shows its true count.
+
+Slots fill to the stack size regardless of where entry boundaries fall, so an entry can straddle two slots (three 40-item entries lay out as 64 + 56, with the middle entry split between them). Claiming a slot hands over its portion and writes the rest of the consumed entry back to overflow, where it reappears in the refreshed view.
+
+This can't duplicate items: an entry is only ever given from after a claim wins its atomic `claimed = 0` guarded mark, an entry marks exactly once, and everything the winner doesn't hand over is written back in full. A second click on another slice of the same entry loses the mark and gives nothing.
+
+Counts (`%oakoverflow_unclaimed_count%`, notifications, `limits.max-items-per-player`) measure items rather than rows, so they agree with what the GUI shows.
+
+## Blocked Drop Rescue
+
+When a container closes with items still inside it (a villager's payment slots, a crafting grid, an anvil) and the player's inventory is full, the server tries to drop the leftovers on the ground. If a protection plugin blocks item drops in that area, the server hands back only what fits and **silently deletes the rest**.
+
+With `drop-rescue.enabled` (on by default), the part that would be deleted goes to overflow storage instead. Items that fit still go straight to the player, so nothing duplicates, and normal player drops (Q key) are never affected.
+
+`oakoverflow.bypass` does not apply here: it means "let my items drop normally", and on this path they cannot drop at all.
 
 ## PhoenixCratesPro Integration
 

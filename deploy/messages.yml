@@ -1,0 +1,196 @@
+# ============================================================
+# OAKOVERFLOW MESSAGES
+# ============================================================
+# All messages support MiniMessage formatting: https://docs.advntr.dev/minimessage/format.html
+#
+# Gameplay messages use text/display structure:
+#   text: "MiniMessage string"
+#   display: chat or action_bar
+#
+# Command messages use flat strings (always delivered via chat).
+# Set any message to "" to disable it.
+#
+# Placeholders:
+#   <count>     - Number of items/players
+#   <player>    - Player name
+#   <item>      - Item name
+#   <amount>    - Item quantity
+#   <source>    - Where item came from
+#   <age>       - Time since received
+#   <total>     - Total items in database
+#   <unclaimed> - Number of unclaimed items
+#   <current>   - Current page number
+
+# ============================================================
+# GAMEPLAY MESSAGES
+# ============================================================
+no-unclaimed-items:
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#f2ebd7>ʏᴏᴜ ʜᴀᴠᴇ ɴᴏ ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ."
+  display: chat
+items-count:
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#f2ebd7>ʏᴏᴜ ʜᴀᴠᴇ <#FCD472><count><#f2ebd7> ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ."
+  display: chat
+claim-success:
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>ᴄʟᴀɪᴍᴇᴅ <#FCD472><amount>x <item><#8FAA87>!"
+  display: chat
+claim-all-success:
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>ᴄʟᴀɪᴍᴇᴅ <#FCD472><count><#8FAA87> ɪᴛᴇᴍꜱ!"
+  display: chat
+claim-all-partial:
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>ᴄʟᴀɪᴍᴇᴅ <#FCD472><claimed><#8FAA87> ɪᴛᴇᴍꜱ. <#D89B6A><returned> ɪᴛᴇᴍꜱ ʟᴇꜰᴛ ɪɴ ᴏᴠᴇʀꜰʟᴏᴡ (ɪɴᴠᴇɴᴛᴏʀʏ ꜰᴜʟʟ)."
+  display: chat
+claim-failed-full:
+  text: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>ɴᴏᴛ ᴇɴᴏᴜɢʜ<#f2ebd7> ɪɴᴠᴇɴᴛᴏʀʏ ꜱᴘᴀᴄᴇ."
+  display: chat
+limit-reached:
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A>ᴏᴠᴇʀꜰʟᴏᴡ ꜱᴛᴏʀᴀɢᴇ ɪꜱ ꜰᴜʟʟ. ᴄʟᴀɪᴍ ɪᴛᴇᴍꜱ ᴡɪᴛʜ <#FCD472>/ᴏᴠᴇʀꜰʟᴏᴡ<#D89B6A>."
+  display: chat
+item-received:
+  text: "<#FCD472><amount>x <item> <#D89B6A>ꜱᴇɴᴛ ᴛᴏ ᴏᴠᴇʀꜰʟᴏᴡ <#6C757D>(<source>)"
+  display: action_bar
+join-notification:
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#f2ebd7>ʏᴏᴜ ʜᴀᴠᴇ <#FCD472><count><#f2ebd7> ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ. <click:run_command:/overflow><hover:show_text:'<#8FAA87>ᴏᴘᴇɴ ᴏᴠᴇʀꜰʟᴏᴡ ꜱᴛᴏʀᴀɢᴇ'><#FCD472>[ᴏᴘᴇɴ]</hover></click>"
+  display: chat
+action-bar-unclaimed:
+  text: "<#FCD472>✉ <#f2ebd7><count> ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ <#6C757D>• <#FCD472>/ᴏᴠᴇʀꜰʟᴏᴡ"
+  display: action_bar
+# Expiry warning: sent on join when items are nearing auto-deletion
+# Placeholders: <count> - number of expiring items, <days> - days until deletion
+expiry-warning:
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A><count> ɪᴛᴇᴍꜱ ᴡɪʟʟ ʙᴇ ᴀᴜᴛᴏ-ᴅᴇʟᴇᴛᴇᴅ ᴡɪᴛʜɪɴ <#FCD472><days><#D89B6A> ᴅᴀʏꜱ. <click:run_command:/overflow><hover:show_text:'<#8FAA87>ᴏᴘᴇɴ ᴏᴠᴇʀꜰʟᴏᴡ ꜱᴛᴏʀᴀɢᴇ'><#FCD472>[ᴄʟᴀɪᴍ ɴᴏᴡ]</hover></click>"
+  display: chat
+
+# ============================================================
+# COMMAND MESSAGES
+# ============================================================
+commands:
+  # Player help
+  player-help-header: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<#FCD472><bold>ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ</bold>\n<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  player-help-open: "<#FCD472>/ᴏᴠᴇʀꜰʟᴏᴡ <#6C757D>— <#f2ebd7>ᴏᴘᴇɴ ᴏᴠᴇʀꜰʟᴏᴡ ꜱᴛᴏʀᴀɢᴇ"
+  player-help-count: "<#FCD472>/ᴏᴠᴇʀꜰʟᴏᴡ ᴄᴏᴜɴᴛ <#6C757D>— <#f2ebd7>ꜱʜᴏᴡ ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍ ᴄᴏᴜɴᴛ"
+  player-help-claimall: "<#FCD472>/ᴏᴠᴇʀꜰʟᴏᴡ ᴄʟᴀɪᴍᴀʟʟ <#6C757D>— <#f2ebd7>ᴄʟᴀɪᴍ ᴀʟʟ ɪᴛᴇᴍꜱ ᴀᴛ ᴏɴᴄᴇ"
+  player-help-footer: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  # Admin help
+  help-header: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<#FCD472><bold>ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ᴀᴅᴍɪɴ</bold>\n<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  help-view: "<#FCD472>/ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ᴠɪᴇᴡ <#6C757D><<#f2ebd7>ᴘʟᴀʏᴇʀ<#6C757D>> <#6C757D>— <#f2ebd7>ᴠɪᴇᴡ ᴀ ᴘʟᴀʏᴇʀ'ꜱ ᴏᴠᴇʀꜰʟᴏᴡ"
+  help-clear: "<#FCD472>/ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ᴄʟᴇᴀʀ <#6C757D><<#f2ebd7>ᴘʟᴀʏᴇʀ<#6C757D>> <#6C757D>— <#f2ebd7>ᴄʟᴇᴀʀ ᴀ ᴘʟᴀʏᴇʀ'ꜱ ɪᴛᴇᴍꜱ"
+  help-clearall: "<#FCD472>/ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ᴄʟᴇᴀʀᴀʟʟ <#6C757D>— <#f2ebd7>ᴄʟᴇᴀʀ ᴀʟʟ ɪᴛᴇᴍꜱ"
+  help-stats: "<#FCD472>/ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ꜱᴛᴀᴛꜱ <#6C757D>— <#f2ebd7>ᴅᴀᴛᴀʙᴀꜱᴇ ꜱᴛᴀᴛɪꜱᴛɪᴄꜱ"
+  help-reload: "<#FCD472>/ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ʀᴇʟᴏᴀᴅ <#6C757D>— <#f2ebd7>ʀᴇʟᴏᴀᴅ ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ"
+  help-purge: "<#FCD472>/ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ᴘᴜʀɢᴇ <#6C757D>— <#f2ebd7>ʀᴇᴍᴏᴠᴇ ᴄᴏʀʀᴜᴘᴛᴇᴅ ɪᴛᴇᴍꜱ"
+  help-migrate: "<#FCD472>/ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ᴍɪɢʀᴀᴛᴇ <#6C757D><<#f2ebd7>ꜱꞯʟɪᴛᴇ|ᴍʏꜱꞯʟ<#6C757D>> <#6C757D>— <#f2ebd7>ᴍɪɢʀᴀᴛᴇ ᴅᴀᴛᴀʙᴀꜱᴇ"
+  help-footer: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  # Admin view
+  player-never-joined: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#f2ebd7>ᴘʟᴀʏᴇʀ <#FCD472><player><#f2ebd7> ʜᴀꜱ <#C27B6B>ɴᴇᴠᴇʀ ᴊᴏɪɴᴇᴅ<#f2ebd7> ᴛʜɪꜱ ꜱᴇʀᴠᴇʀ."
+  # Admin clear
+  no-items-to-clear: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A><player> ʜᴀꜱ ɴᴏ ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ ᴛᴏ ᴄʟᴇᴀʀ."
+  clear-success: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>ᴄʟᴇᴀʀᴇᴅ <#FCD472><count><#8FAA87> ɪᴛᴇᴍꜱ ꜰᴏʀ <#FCD472><player><#8FAA87>."
+  clear-notification: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A>ʏᴏᴜʀ ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴄʟᴇᴀʀᴇᴅ ʙʏ ᴀɴ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛᴏʀ."
+  # Admin clearall
+  clear-all-success: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>ᴄʟᴇᴀʀᴇᴅ <#FCD472><count><#8FAA87> ɪᴛᴇᴍꜱ ꜰʀᴏᴍ ᴀʟʟ ᴘʟᴀʏᴇʀꜱ."
+  clearall-warning: "<#C27B6B><bold>⚠ ᴡᴀʀɴɪɴɢ</bold>\n<#f2ebd7>ᴛʜɪꜱ ᴡɪʟʟ ᴘᴇʀᴍᴀɴᴇɴᴛʟʏ ᴅᴇʟᴇᴛᴇ ᴀʟʟ ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ ꜰᴏʀ ᴇᴠᴇʀʏ ᴘʟᴀʏᴇʀ.\n<#D89B6A>ʀᴜɴ <#FCD472>/ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ᴄʟᴇᴀʀᴀʟʟ ᴄᴏɴꜰɪʀᴍ<#D89B6A> ᴡɪᴛʜɪɴ 30 ꜱᴇᴄᴏɴᴅꜱ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ."
+  clearall-confirm-expired: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#f2ebd7>ᴄᴏɴꜰɪʀᴍᴀᴛɪᴏɴ <#C27B6B>ᴇxᴘɪʀᴇᴅ<#f2ebd7>. ʀᴜɴ ᴛʜᴇ ᴄᴏᴍᴍᴀɴᴅ ᴀɢᴀɪɴ."
+  clearall-processing: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A>ᴄʟᴇᴀʀɪɴɢ ᴀʟʟ ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ..."
+  clearall-broadcast: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A>ᴀʟʟ ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ ʜᴀᴠᴇ ʙᴇᴇɴ ᴄʟᴇᴀʀᴇᴅ ʙʏ ᴀɴ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛᴏʀ."
+  # Reload
+  reload-success: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ ʀᴇʟᴏᴀᴅᴇᴅ."
+  reload-failed: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>ꜰᴀɪʟᴇᴅ<#f2ebd7> ᴛᴏ ʀᴇʟᴏᴀᴅ ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ. ᴄʜᴇᴄᴋ ᴄᴏɴꜱᴏʟᴇ."
+  reload-processing: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A>ʀᴇʟᴏᴀᴅɪɴɢ ᴄᴏɴꜰɪɢᴜʀᴀᴛɪᴏɴ..."
+  # Stats
+  loading-stats: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A>ʟᴏᴀᴅɪɴɢ ꜱᴛᴀᴛɪꜱᴛɪᴄꜱ..."
+  stats-header: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n<#FCD472><bold>ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ꜱᴛᴀᴛɪꜱᴛɪᴄꜱ</bold>\n<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  stats-total: "<#f2ebd7>ᴛᴏᴛᴀʟ ɪᴛᴇᴍꜱ <#6C757D>— <#FCD472><total>"
+  stats-unclaimed: "<#f2ebd7>ᴜɴᴄʟᴀɪᴍᴇᴅ <#6C757D>— <#FCD472><unclaimed>"
+  stats-claimed: "<#f2ebd7>ᴄʟᴀɪᴍᴇᴅ <#6C757D>— <#FCD472><claimed>"
+  stats-players: "<#f2ebd7>ᴜɴɪꞯᴜᴇ ᴘʟᴀʏᴇʀꜱ <#6C757D>— <#FCD472><players>"
+  stats-schema-version: "<#f2ebd7>ꜱᴄʜᴇᴍᴀ ᴠᴇʀꜱɪᴏɴ <#6C757D>— <#FCD472><version>"
+  stats-oldest: "<#f2ebd7>ᴏʟᴅᴇꜱᴛ ɪᴛᴇᴍ <#6C757D>— <#FCD472><age>"
+  stats-footer: "<#6C757D>━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+  # Purge
+  purge-processing: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A>ꜱᴄᴀɴɴɪɴɢ ꜰᴏʀ ᴄᴏʀʀᴜᴘᴛᴇᴅ ɪᴛᴇᴍꜱ..."
+  purge-success: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>ᴘᴜʀɢᴇᴅ <#FCD472><count><#8FAA87> ᴄᴏʀʀᴜᴘᴛᴇᴅ ɪᴛᴇᴍꜱ."
+  purge-none: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>ɴᴏ ᴄᴏʀʀᴜᴘᴛᴇᴅ ɪᴛᴇᴍꜱ ꜰᴏᴜɴᴅ."
+  # Migrate
+  migrate-warning: "<#C27B6B><bold>⚠ ᴡᴀʀɴɪɴɢ</bold>\n<#f2ebd7>ᴛʜɪꜱ ᴡɪʟʟ ᴍɪɢʀᴀᴛᴇ ᴀʟʟ ᴅᴀᴛᴀ ꜰʀᴏᴍ <#FCD472><source><#f2ebd7> ᴛᴏ <#FCD472><target><#f2ebd7>.\n<#D89B6A>ʀᴜɴ <#FCD472>/ᴏᴀᴋᴏᴠᴇʀꜰʟᴏᴡ ᴍɪɢʀᴀᴛᴇ <target> ᴄᴏɴꜰɪʀᴍ<#D89B6A> ᴡɪᴛʜɪɴ 30 ꜱᴇᴄᴏɴᴅꜱ ᴛᴏ ᴘʀᴏᴄᴇᴇᴅ."
+  migrate-confirm-expired: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#f2ebd7>ᴄᴏɴꜰɪʀᴍᴀᴛɪᴏɴ <#C27B6B>ᴇxᴘɪʀᴇᴅ<#f2ebd7>. ʀᴜɴ ᴛʜᴇ ᴄᴏᴍᴍᴀɴᴅ ᴀɢᴀɪɴ."
+  migrate-started: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A>ꜱᴛᴀʀᴛɪɴɢ ᴅᴀᴛᴀʙᴀꜱᴇ ᴍɪɢʀᴀᴛɪᴏɴ..."
+  migrate-progress: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A>ᴍɪɢʀᴀᴛɪɴɢ <#FCD472><count><#D89B6A> ɪᴛᴇᴍꜱ..."
+  migrate-success: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>ᴍɪɢʀᴀᴛɪᴏɴ ᴄᴏᴍᴘʟᴇᴛᴇ! <#FCD472><count><#8FAA87> ɪᴛᴇᴍꜱ ᴍɪɢʀᴀᴛᴇᴅ ᴛᴏ <#FCD472><target><#8FAA87>."
+  migrate-failed: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#f2ebd7>ᴍɪɢʀᴀᴛɪᴏɴ <#C27B6B>ꜰᴀɪʟᴇᴅ<#f2ebd7>. ᴄʜᴇᴄᴋ ᴄᴏɴꜱᴏʟᴇ ꜰᴏʀ ᴅᴇᴛᴀɪʟꜱ. ᴏʀɪɢɪɴᴀʟ ᴅᴀᴛᴀʙᴀꜱᴇ ɪꜱ ᴜɴᴄʜᴀɴɢᴇᴅ."
+  migrate-invalid-target: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#f2ebd7>ᴄᴏɴꜰɪɢᴜʀᴇ ᴍʏꜱꞯʟ ꜱᴇᴛᴛɪɴɢꜱ ɪɴ ᴄᴏɴꜰɪɢ.ʏᴍʟ ʙᴇꜰᴏʀᴇ ᴍɪɢʀᴀᴛɪɴɢ."
+  migrate-same-type: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#f2ebd7>ᴀʟʀᴇᴀᴅʏ ᴜꜱɪɴɢ <#FCD472><type><#f2ebd7> ᴅᴀᴛᴀʙᴀꜱᴇ."
+  # Errors
+  database-error: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#f2ebd7>ᴀ ᴅᴀᴛᴀʙᴀꜱᴇ <#C27B6B>ᴇʀʀᴏʀ ᴏᴄᴄᴜʀʀᴇᴅ<#f2ebd7>. ᴄᴏɴᴛᴀᴄᴛ ᴀɴ ᴀᴅᴍɪɴɪꜱᴛʀᴀᴛᴏʀ."
+  corrupted-item: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#f2ebd7>ᴛʜɪꜱ ɪᴛᴇᴍ ɪꜱ <#C27B6B>ᴄᴏʀʀᴜᴘᴛᴇᴅ<#f2ebd7> ᴀɴᴅ ᴄᴀɴɴᴏᴛ ʙᴇ ᴄʟᴀɪᴍᴇᴅ."
+  # Integration
+  player-not-found: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#f2ebd7>ᴘʟᴀʏᴇʀ <#FCD472><player><#f2ebd7> <#C27B6B>ɴᴏᴛ ꜰᴏᴜɴᴅ<#f2ebd7>."
+
+# ============================================================
+# GUI MESSAGES
+# ============================================================
+gui:
+  # Lore appended to items in player view (empty list = no extra lore)
+  # Placeholders: <amount>, <stacks>, <source>, <age>
+  player-item-lore: []
+  # Lore appended to items in admin view
+  # Placeholders: <amount>, <stacks>, <source>, <age>
+  admin-item-lore:
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    - "<#6C757D>Amount: <#FCD472><amount>"
+    - "<#6C757D>Entries: <#FCD472><stacks>"
+    - "<#6C757D>Source: <#FCD472><source>"
+    - "<#6C757D>Received: <#FCD472><age>"
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+  corrupted-item-name: "<#C27B6B>Corrupted Item"
+  corrupted-item-lore:
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    - "<#6C757D>This item failed to load."
+    - "<#6C757D>It may be corrupted or"
+    - "<#6C757D>from an older version."
+    - ""
+    - "<#6C757D>ID: <#FCD472><id>"
+    - "<#6C757D>Source: <#FCD472><source>"
+    - "<#6C757D>Received: <#FCD472><age>"
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    - "<#C27B6B>Cannot be claimed"
+  claim-all-button-name: "<#8FAA87><bold>Claim All</bold>"
+  claim-all-button-lore:
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    - "<#f2ebd7>Claim all <#FCD472><count><#f2ebd7> items at once"
+    - "<#6C757D>Only what fits is taken"
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+  next-page-button-name: "<#f2ebd7>Next Page <#8FAA87>→"
+  next-page-button-lore:
+    - "<#6C757D>Page <#FCD472><current><#6C757D> of <#FCD472><total>"
+  previous-page-button-name: "<#8FAA87>← <#f2ebd7>Previous Page"
+  previous-page-button-lore:
+    - "<#6C757D>Page <#FCD472><current><#6C757D> of <#FCD472><total>"
+  filler-item-name: " "
+  # Sort button
+  sort-button-name: "<#89B5C9>Sort"
+  sort-button-lore:
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    - "<#f2ebd7>Current: <#FCD472><mode>"
+    - ""
+    - "<#6C757D>Click to cycle sort mode"
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+  sort-mode-newest: "ɴᴇᴡᴇꜱᴛ ꜰɪʀꜱᴛ"
+  sort-mode-oldest: "ᴏʟᴅᴇꜱᴛ ꜰɪʀꜱᴛ"
+  sort-mode-type: "ʙʏ ᴛʏᴘᴇ"
+  sort-mode-source: "ʙʏ ꜱᴏᴜʀᴄᴇ"
+  # Capacity indicator (shown when max-items-per-player is set)
+  # Placeholders: <count>, <max>, <percentage>
+  capacity-indicator-name: "<#FCD472><count><#6C757D>/<#FCD472><max> <#f2ebd7>Items"
+  capacity-indicator-lore:
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    - "<#f2ebd7>Storage: <#FCD472><percentage>%<#f2ebd7> used"
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+  admin-view-empty: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#D89B6A><player> ʜᴀꜱ ɴᴏ ᴜɴᴄʟᴀɪᴍᴇᴅ ɪᴛᴇᴍꜱ."
+  admin-view-title: "<player>'ꜱ ᴏᴠᴇʀꜰʟᴏᴡ"
+  view-only-button-name: "<#C27B6B>View Only"
+  view-only-button-lore:
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+    - "<#6C757D>Viewing <#FCD472><player><#6C757D>'s items"
+    - "<#C27B6B>Claiming is disabled"
+    - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
+  view-only-denied: "<#6C757D>[<#C27B6B>ᴇʀʀᴏʀ<#6C757D>] <#C27B6B>ᴄᴀɴɴᴏᴛ ᴄʟᴀɪᴍ<#f2ebd7> ɪᴛᴇᴍꜱ ɪɴ ᴠɪᴇᴡ-ᴏɴʟʏ ᴍᴏᴅᴇ."

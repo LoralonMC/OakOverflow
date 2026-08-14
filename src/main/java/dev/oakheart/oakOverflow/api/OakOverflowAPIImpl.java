@@ -10,19 +10,25 @@ import org.bukkit.inventory.ItemStack;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.logging.Logger;
 
 /**
  * Implementation of the OakOverflow API.
  */
 public class OakOverflowAPIImpl implements OakOverflowAPI {
 
+    /** Stack multiples above which a single add is worth flagging as suspicious. */
+    private static final int SPLIT_WARN_THRESHOLD = 100;
+
     private DataStore dataStore;
     private final ConfigManager configManager;
     private final CountCache countCache;
+    private final Logger logger;
 
-    public OakOverflowAPIImpl(DataStore dataStore, ConfigManager configManager) {
+    public OakOverflowAPIImpl(DataStore dataStore, ConfigManager configManager, Logger logger) {
         this.dataStore = dataStore;
         this.configManager = configManager;
+        this.logger = logger;
         this.countCache = new CountCache(configManager);
     }
 
@@ -39,8 +45,46 @@ public class OakOverflowAPIImpl implements OakOverflowAPI {
         // the failure was ignored), two concurrent adds overwrote each other's
         // totals, and an open GUI held the pre-merge amount which claimItem then
         // gave out while marking the whole row claimed. One row per add is
-        // race-free; stack-style presentation is a GUI concern, not storage.
-        return dataStore.addOverflowItem(playerUUID, playerName, item, amount, source)
+        // race-free; stack-style presentation is a GUI concern, not storage, and
+        // lives in UnclaimedItemsGUI#rebuildEntries.
+        //
+        // Rows are capped at one stack on the way in. The GUI packs whole rows into
+        // slots, so a row bigger than a stack is the one thing it can't lay out
+        // properly: it has to render capped and explain itself in lore. Splitting
+        // here means every row can share a slot with its neighbours, and costs
+        // nothing, since storage is one-row-per-receipt regardless.
+        int maxStack = Math.max(1, item.getMaxStackSize());
+        if (amount <= maxStack) {
+            return insertRow(playerUUID, playerName, item, amount, source);
+        }
+
+        if (amount / maxStack > SPLIT_WARN_THRESHOLD) {
+            logger.warning("Splitting an unusually large overflow add for " + playerName + ": "
+                    + amount + "x " + item.getType() + " becomes " + ((amount + maxStack - 1) / maxStack)
+                    + " rows (source: " + source + ")");
+        }
+
+        CompletableFuture<OverflowItem> firstRow = null;
+        int remaining = amount;
+        while (remaining > 0) {
+            int slice = Math.min(remaining, maxStack);
+            CompletableFuture<OverflowItem> inserted = insertRow(playerUUID, playerName, item, slice, source);
+            if (firstRow == null) {
+                firstRow = inserted;
+            }
+            remaining -= slice;
+        }
+        return firstRow;
+    }
+
+    /**
+     * Writes a single row, sized to the amount it actually holds.
+     */
+    private CompletableFuture<OverflowItem> insertRow(UUID playerUUID, String playerName,
+                                                      ItemStack item, int amount, String source) {
+        ItemStack row = item.clone();
+        row.setAmount(amount);
+        return dataStore.addOverflowItem(playerUUID, playerName, row, amount, source)
                 .thenApply(overflowItem -> {
                     countCache.invalidate(playerUUID);
                     return overflowItem;
@@ -55,8 +99,21 @@ public class OakOverflowAPIImpl implements OakOverflowAPI {
 
     @Override
     public CompletableFuture<List<OverflowItem>> getUnclaimedItems(UUID playerUUID) {
-        int limit = configManager.hasQueryLimit() ? configManager.getMaxQueryLimit() : -1;
-        return dataStore.getUnclaimedItems(playerUUID, limit);
+        if (!configManager.hasQueryLimit()) {
+            return dataStore.getUnclaimedItems(playerUUID, -1);
+        }
+
+        // A cap truncates a newest-first query, so it hides the player's OLDEST items.
+        // Never let that happen quietly.
+        int limit = configManager.getMaxQueryLimit();
+        return dataStore.getUnclaimedItems(playerUUID, limit).thenApply(items -> {
+            if (items.size() >= limit) {
+                logger.warning("Overflow query for " + playerUUID + " hit advanced.max-query-limit ("
+                        + limit + "). Their older items are not visible in /overflow or claimall. "
+                        + "Raise or remove the limit, or use limits.auto-delete-days.");
+            }
+            return items;
+        });
     }
 
     @Override

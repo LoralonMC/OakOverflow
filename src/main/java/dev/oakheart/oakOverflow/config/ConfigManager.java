@@ -1,5 +1,6 @@
 package dev.oakheart.oakoverflow.config;
 
+import dev.oakheart.config.ConfigMigrator;
 import dev.oakheart.oakoverflow.OakOverflow;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -28,6 +29,7 @@ public class ConfigManager {
     // Cached hot-path values
     private double interceptionRadius;
     private double ambiguityThreshold;
+    private boolean dropRescueEnabled;
     private boolean debugMode;
     private int guiSize;
     private int itemsPerPage;
@@ -67,10 +69,12 @@ public class ConfigManager {
         try {
             this.config = dev.oakheart.config.ConfigManager.load(configFile.toPath());
         } catch (IOException e) {
-            throw new RuntimeException("Failed to load config.yml", e);
+            throw new IllegalStateException("Failed to load config.yml", e);
         }
-        mergeDefaults();
-        validate(this.config);
+        evolve(this.config);
+        if (!validate(this.config)) {
+            throw new IllegalStateException("config.yml failed validation, see the warnings above");
+        }
         cacheValues();
     }
 
@@ -82,7 +86,7 @@ public class ConfigManager {
     public boolean reload() {
         try {
             dev.oakheart.config.ConfigManager newConfig = dev.oakheart.config.ConfigManager.load(configFile.toPath());
-            mergeDefaults(newConfig);
+            evolve(newConfig);
 
             if (!validate(newConfig)) {
                 logger.warning("Configuration reload failed validation. Keeping previous configuration.");
@@ -107,27 +111,36 @@ public class ConfigManager {
     }
 
     /**
-     * Merges default config values from the JAR resource into the current config.
+     * Brings an admin's config.yml up to date with the shipped defaults, in the
+     * order the library requires: version-gated structural migrations, then
+     * additive key merging, then comment sync. Saves once if anything changed.
      */
-    private void mergeDefaults() {
-        mergeDefaults(this.config);
-    }
-
-    /**
-     * Merges default config values from the JAR resource into the given config.
-     * Only saves if new keys are found, avoiding reformatting.
-     */
-    private void mergeDefaults(dev.oakheart.config.ConfigManager target) {
+    private void evolve(dev.oakheart.config.ConfigManager target) {
         try (var stream = plugin.getResource("config.yml")) {
-            if (stream != null) {
-                var defaults = dev.oakheart.config.ConfigManager.fromStream(stream);
-                if (target.mergeDefaults(defaults)) {
-                    target.save();
-                    logger.info("Merged missing config keys from defaults.");
-                }
+            if (stream == null) {
+                return;
+            }
+            var defaults = dev.oakheart.config.ConfigManager.fromStream(stream);
+
+            // v2: gui.auto-update was never read by anything, so drop it rather than
+            //     leave a setting in the file that silently does nothing.
+            // v3: the old 10000 default silently hid a player's oldest items once they
+            //     passed it. Drop the key so mergeDefaults writes the new -1 default.
+            boolean migrated = ConfigMigrator.forConfig(target)
+                    .step(2, c -> c.removeKey("gui.auto-update"))
+                    .step(3, c -> c.removeKey("advanced.max-query-limit"))
+                    .run();
+
+            boolean merged = target.mergeDefaults(defaults);
+            boolean comments = target.syncComments(defaults,
+                    configFile.getParentFile().toPath().resolve(".oakheart/config-baseline.yml"));
+
+            if (migrated || merged || comments) {
+                target.save();
+                logger.info("config.yml updated with new defaults.");
             }
         } catch (IOException e) {
-            logger.log(Level.WARNING, "Failed to merge default config", e);
+            logger.log(Level.WARNING, "Failed to update config defaults", e);
         }
     }
 
@@ -221,6 +234,7 @@ public class ConfigManager {
     private void cacheValues() {
         interceptionRadius = config.getDouble("performance.interception-radius", 5.0);
         ambiguityThreshold = config.getDouble("performance.interception-ambiguity-threshold", 1.5);
+        dropRescueEnabled = config.getBoolean("drop-rescue.enabled", true);
         debugMode = config.getBoolean("advanced.debug", false);
 
         int size = config.getInt("gui.size", 54);
@@ -240,7 +254,7 @@ public class ConfigManager {
         actionBarUpdateInterval = config.getInt("notifications.action-bar.update-interval", 60);
         actionBarOnlyWhenItems = config.getBoolean("notifications.action-bar.only-when-items", true);
 
-        String titleStr = config.getString("gui.title", "<#FCD472>Overflow Storage");
+        String titleStr = config.getString("gui.title", "Overflow Storage");
         guiTitle = MiniMessage.miniMessage().deserialize(titleStr);
 
         previousPageMaterial = parseMaterial("gui.buttons.previous-page", Material.ARROW);
@@ -275,6 +289,14 @@ public class ConfigManager {
 
     public double getInterceptionAmbiguityThreshold() {
         return ambiguityThreshold;
+    }
+
+    /**
+     * Whether to rescue items the server would destroy when another plugin cancels
+     * a drop and the player's inventory is full.
+     */
+    public boolean isDropRescueEnabled() {
+        return dropRescueEnabled;
     }
 
     // ========================================
@@ -343,10 +365,6 @@ public class ConfigManager {
 
     public int getItemsPerPage() {
         return itemsPerPage;
-    }
-
-    public boolean isGuiAutoUpdate() {
-        return config.getBoolean("gui.auto-update", true);
     }
 
     public boolean areGuiSoundsEnabled() {
@@ -537,14 +555,10 @@ public class ConfigManager {
     }
 
     public int getMaxQueryLimit() {
-        return config.getInt("advanced.max-query-limit", 10000);
+        return config.getInt("advanced.max-query-limit", -1);
     }
 
     public boolean hasQueryLimit() {
         return getMaxQueryLimit() > 0;
-    }
-
-    public int getConfigVersion() {
-        return config.getInt("config-version", 1);
     }
 }

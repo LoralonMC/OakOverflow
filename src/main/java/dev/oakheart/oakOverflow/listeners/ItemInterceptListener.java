@@ -17,12 +17,10 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
 import org.bukkit.event.entity.ItemSpawnEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.scheduler.BukkitTask;
 
-import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 /**
@@ -31,15 +29,21 @@ import java.util.logging.Level;
  */
 public class ItemInterceptListener implements Listener {
 
+    /**
+     * Scoreboard tag placed on items this listener drops on the ground itself.
+     * Without it the interceptor would pick its own drop straight back up, and a
+     * player at their overflow limit with a full inventory would loop forever.
+     */
+    public static final String IGNORE_TAG = "oakoverflow_ignore";
+
+    /** Source label for items rescued from a drop another plugin cancelled. */
+    private static final String SOURCE_BLOCKED_DROP = "Blocked Drop";
+
     private final OakOverflow plugin;
     private final OakOverflowAPI api;
     private final ConfigManager config;
     private final NotificationManager notificationManager;
     private final MessageManager messages;
-
-    // Track processed item entities to avoid duplicate handling
-    private final Map<UUID, Long> processedItems;
-    private final BukkitTask cleanupTask;
 
     public ItemInterceptListener(OakOverflow plugin, OakOverflowAPI api,
                                   ConfigManager config, NotificationManager notificationManager,
@@ -49,24 +53,7 @@ public class ItemInterceptListener implements Listener {
         this.config = config;
         this.notificationManager = notificationManager;
         this.messages = messages;
-        this.processedItems = new ConcurrentHashMap<>();
-
-        // Clean up old processed items every 10 seconds
-        cleanupTask = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
-            long now = System.currentTimeMillis();
-            processedItems.entrySet().removeIf(entry -> now - entry.getValue() > 5000);
-        }, 200L, 200L);
     }
-
-    /**
-     * Shuts down the listener, cancelling scheduled tasks.
-     */
-    public void shutdown() {
-        if (cleanupTask != null) {
-            cleanupTask.cancel();
-        }
-    }
-
 
     // ========================================
     //      Item Spawn Interception
@@ -89,8 +76,10 @@ public class ItemInterceptListener implements Listener {
             return;
         }
 
-        // Skip items tagged by other plugins as "don't intercept"
-        if (itemEntity.getScoreboardTags().stream().anyMatch(tag -> tag.startsWith("oaktools_"))) {
+        // Skip items tagged by other plugins as "don't intercept", and our own
+        // ground drops (see IGNORE_TAG)
+        if (itemEntity.getScoreboardTags().stream()
+                .anyMatch(tag -> tag.startsWith("oaktools_") || tag.equals(IGNORE_TAG))) {
             return;
         }
 
@@ -137,12 +126,6 @@ public class ItemInterceptListener implements Listener {
             return;
         }
 
-        // Atomically check and mark as processed
-        UUID itemUUID = itemEntity.getUniqueId();
-        if (processedItems.putIfAbsent(itemUUID, System.currentTimeMillis()) != null) {
-            return; // Already processed
-        }
-
         // Determine source based on spawn reason
         String source = getSourceFromSpawnReason(spawnReason);
 
@@ -155,6 +138,56 @@ public class ItemInterceptListener implements Listener {
                     " x" + item.getAmount() + " for " + nearestPlayer.getName() +
                     " (reason: " + spawnReason + ")");
         }
+    }
+
+    // ========================================
+    //      Blocked Drop Rescue
+    // ========================================
+
+    /**
+     * Rescues items the server destroys when another plugin cancels a drop.
+     *
+     * <p>When a container closes with items still in it (a merchant's payment slots,
+     * a crafting grid, an anvil) and the player's inventory is full, vanilla falls
+     * back to {@code player.drop(...)}. If a protection plugin cancels the resulting
+     * {@link PlayerDropItemEvent}, CraftBukkit hands the stack back via
+     * {@code Inventory#addItem} and <b>silently discards whatever doesn't fit</b>.
+     * That is how villager-trade change and crafting-grid contents vanish inside a
+     * claim with item drops disabled.
+     *
+     * <p>Running at MONITOR means the inventory is still in its pre-fallback state,
+     * so the portion that won't fit is exactly the portion about to be destroyed.
+     * Only that remainder is taken into overflow; everything that fits still reaches
+     * the player through CraftBukkit's own fallback, so nothing is duplicated.
+     *
+     * <p>A player-initiated drop (Q) can never reach this branch: the slot the item
+     * just left is free, so the whole stack always fits and the rescue no-ops.
+     *
+     * <p>{@code oakoverflow.bypass} is deliberately <b>not</b> honoured here. Bypass
+     * means "let my items drop normally instead of going to overflow", and on this
+     * path they cannot drop at all, so honouring it would mean deleting them.
+     */
+    @EventHandler(priority = EventPriority.MONITOR)
+    public void onPlayerDropItem(PlayerDropItemEvent event) {
+        if (!event.isCancelled() || !config.isDropRescueEnabled()) {
+            return;
+        }
+
+        ItemStack stack = event.getItemDrop().getItemStack();
+        if (stack.getType().isAir()) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+        int destroyed = stack.getAmount() - InventoryHelper.calculateMaxFit(player, stack);
+        if (destroyed <= 0) {
+            return; // CraftBukkit's fallback returns the whole stack, nothing is lost
+        }
+
+        sendToOverflow(player, stack, destroyed, SOURCE_BLOCKED_DROP);
+
+        plugin.debug("Rescued blocked drop: " + ItemNameUtil.getItemDisplayName(stack) +
+                " x" + destroyed + " for " + player.getName());
     }
 
     /**
@@ -232,7 +265,7 @@ public class ItemInterceptListener implements Listener {
             if (reachedLimit) {
                 Bukkit.getScheduler().runTask(plugin, () -> {
                     // Drop the item naturally so it isn't lost
-                    player.getWorld().dropItemNaturally(player.getLocation(), itemCopy);
+                    dropIgnored(player, itemCopy);
                     messages.send(player, "limit-reached");
                     plugin.getLogger().warning("Player " + player.getName() + " has reached overflow item limit — item dropped naturally");
                 });
@@ -246,7 +279,7 @@ public class ItemInterceptListener implements Listener {
                 Bukkit.getPluginManager().callEvent(event);
 
                 if (event.isCancelled()) {
-                    player.getWorld().dropItemNaturally(player.getLocation(), itemCopy);
+                    dropIgnored(player, itemCopy);
                     result.complete(null);
                     return;
                 }
@@ -273,5 +306,17 @@ public class ItemInterceptListener implements Listener {
             plugin.getLogger().log(Level.SEVERE, "Failed to add overflow item", throwable);
             return null;
         });
+    }
+
+    /**
+     * Drops an item on the ground for a player, tagged so {@link #onItemSpawn} skips it.
+     * <p>
+     * Without the tag the interceptor sees its own drop land next to a player whose
+     * inventory is still full, sends it back to overflow, hits the same limit, drops
+     * it again. An endless loop that never terminates while the player stands there.
+     */
+    private void dropIgnored(Player player, ItemStack item) {
+        player.getWorld().dropItemNaturally(player.getLocation(), item,
+                dropped -> dropped.addScoreboardTag(IGNORE_TAG));
     }
 }

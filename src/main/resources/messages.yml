@@ -36,8 +36,9 @@ claim-success:
 claim-all-success:
   text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>Claimed <#FCD472><count><#8FAA87> items!"
   display: chat
+# <claimed> - items handed over, <returned> - stacks still waiting in overflow
 claim-all-partial:
-  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>Claimed <#FCD472><claimed><#8FAA87> items. <#D89B6A><returned><#D89B6A> items returned to overflow (inventory full)."
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#8FAA87>Claimed <#FCD472><claimed><#8FAA87> items. <#D89B6A><returned><#D89B6A> left in overflow (inventory full)."
   display: chat
 claim-failed-full:
   text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#C27B6B>Not enough inventory space. Make room and try again."
@@ -130,13 +131,17 @@ commands:
 # ============================================================
 gui:
   # Lore appended to items in player view (empty list = no extra lore)
-  # Placeholders: <amount>, <source>, <age>
+  # Placeholders:
+  #   <amount>  - items in this slot (always what the slot renders)
+  #   <stacks>  - number of stored entries this slot draws from
+  #   <source>, <age> - from the first entry in the slot
   player-item-lore: []
   # Lore appended to items in admin view
-  # Placeholders: <amount>, <source>, <age>
+  # Same placeholders as player-item-lore
   admin-item-lore:
     - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
     - "<#6C757D>Amount: <#FCD472><amount>"
+    - "<#6C757D>Entries: <#FCD472><stacks>"
     - "<#6C757D>Source: <#FCD472><source>"
     - "<#6C757D>Received: <#FCD472><age>"
     - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
@@ -152,10 +157,12 @@ gui:
     - "<#6C757D>Received: <#FCD472><age>"
     - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
     - "<#C27B6B>Cannot be claimed"
+  # Placeholders: <count> - total items, <stacks> - number of slots shown
   claim-all-button-name: "<#8FAA87><bold>Claim All</bold>"
   claim-all-button-lore:
     - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
     - "<#f2ebd7>Claim all <#FCD472><count><#f2ebd7> items at once"
+    - "<#6C757D>Only what fits is taken"
     - "<#6C757D>━━━━━━━━━━━━━━━━━━━━"
   next-page-button-name: "<#f2ebd7>Next Page <#8FAA87>→"
   next-page-button-lore:

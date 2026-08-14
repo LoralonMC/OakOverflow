@@ -67,6 +67,13 @@ public class PhoenixCratesListener implements Listener {
             return; // No items to process
         }
 
+        // Capacity consumed by earlier items in this same reward. PhoenixCrates hands
+        // the fitting part of every win item to the player, but does so after this
+        // event, so the inventory still looks empty-ish while we measure. Without
+        // this running total, item 2 onward is measured against space item 1 already
+        // took and its overflow is under-counted (or missed entirely).
+        int capacityUsed = 0;
+
         // Process each item
         for (Item phoenixItem : winItems) {
             try {
@@ -83,7 +90,9 @@ public class PhoenixCratesListener implements Listener {
                 }
 
                 // Calculate how many items will overflow (PhoenixCrates gives fitting items itself)
-                int overflowAmount = amount - InventoryHelper.calculateMaxFit(player, itemStack);
+                int available = Math.max(0, InventoryHelper.calculateMaxFit(player, itemStack) - capacityUsed);
+                int overflowAmount = amount - available;
+                capacityUsed += Math.min(amount, available);
                 if (overflowAmount <= 0) {
                     continue;
                 }

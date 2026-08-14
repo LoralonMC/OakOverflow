@@ -67,9 +67,6 @@ public final class OakOverflow extends JavaPlugin {
         if (cacheCleanupTask != null) {
             cacheCleanupTask.cancel();
         }
-        if (itemInterceptListener != null) {
-            itemInterceptListener.shutdown();
-        }
         if (notificationManager != null) {
             notificationManager.shutdown();
         }
@@ -107,7 +104,7 @@ public final class OakOverflow extends JavaPlugin {
         initializeDatabase();
 
         // API
-        api = new OakOverflowAPIImpl(dataStore, configManager);
+        api = new OakOverflowAPIImpl(dataStore, configManager, getLogger());
 
         // Claim manager
         claimManager = new ClaimManager(this, api, configManager, messageManager);
@@ -125,7 +122,7 @@ public final class OakOverflow extends JavaPlugin {
         }
 
         if (!dataStore.initialize()) {
-            throw new RuntimeException("Failed to initialize " + dbType + " database");
+            throw new IllegalStateException("Failed to initialize " + dbType + " database");
         }
 
         getLogger().info("Database initialized (" + dbType + ")");

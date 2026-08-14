@@ -24,10 +24,25 @@ performance:
   interception-ambiguity-threshold: 1.5
 
 # ============================================================
+# BLOCKED DROP RESCUE
+# ============================================================
+# When a container closes with items still inside it (a villager's payment slots,
+# a crafting grid, an anvil) and the player's inventory is full, the server tries
+# to drop the leftovers on the ground. If a protection plugin blocks item drops in
+# that area, the server hands back what fits and silently DELETES the rest.
+#
+# With this enabled, the part that would be deleted goes to overflow storage
+# instead. Items that fit still go straight to the player, so nothing duplicates.
+# Normal player drops (Q key) are never affected.
+drop-rescue:
+  enabled: true
+
+# ============================================================
 # ITEM LIMITS
 # ============================================================
 limits:
-  # Maximum number of unclaimed items a player can have
+  # Maximum number of unclaimed items a player can have.
+  # Counts items, not storage rows: one waiting stack of 64 counts as 64.
   # Set to -1 for unlimited
   max-items-per-player: -1
   # Auto-delete items older than X days
@@ -69,11 +84,9 @@ gui:
   # GUI size (must be multiple of 9, max 54)
   size: 54
   # GUI title (supports MiniMessage)
-  title: "<#FCD472>Overflow Storage"
+  title: "Overflow Storage"
   # Items per page (leave some slots for navigation buttons)
   items-per-page: 45
-  # Update GUI in real-time when items are claimed
-  auto-update: true
   # Button materials (must be valid Bukkit Material names)
   buttons:
     previous-page: ARROW
@@ -153,18 +166,23 @@ integration:
 advanced:
   # Debug mode (verbose logging)
   debug: false
-  # Thread pool size for async operations
+  # Thread pool size for async database operations (MySQL only;
+  # SQLite always uses a single writer thread)
   async-threads: 2
   # Cache unclaimed counts (improves performance)
   cache:
     enabled: true
     # Cache duration in seconds
     duration: 30
-  # Maximum items to fetch in a single query (prevents memory issues)
-  # Set to -1 for unlimited (not recommended for production)
-  max-query-limit: 10000
+  # Maximum rows to fetch when opening /overflow or claiming everything.
+  # -1 (default) means unlimited, which is what you want: the query returns
+  # newest-first, so a cap doesn't hide the excess, it hides a player's OLDEST
+  # items from both the GUI and claimall with no warning to them.
+  # Only set a cap if a runaway row count is actually hurting you, and prefer
+  # limits.max-items-per-player or limits.auto-delete-days instead.
+  max-query-limit: -1
 
 # ============================================================
 #          DO NOT EDIT BELOW
 # ============================================================
-config-version: 1
+config-version: 3
