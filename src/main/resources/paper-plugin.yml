@@ -17,6 +17,9 @@ dependencies:
     PhoenixCratesPro:
       load: BEFORE
       required: false
+    AxTrade:
+      load: BEFORE
+      required: false
 permissions:
   oakoverflow.*:
     description: 'Grants all OakOverflow permissions'

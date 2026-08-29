@@ -49,6 +49,9 @@ limit-reached:
 item-received:
   text: "<#FCD472><amount>x <item> <#D89B6A>sent to overflow <#6C757D>(<source>)"
   display: action_bar
+trade-rescued:
+  text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#f2ebd7>Your trade was <#C27B6B>cancelled<#f2ebd7> by your death. What you offered is safe in <#FCD472>/overflow<#f2ebd7>."
+  display: chat
 join-notification:
   text: "<#6C757D>[<#6B7A5E>ᴏᴠᴇʀꜰʟᴏᴡ<#6C757D>] <#f2ebd7>You have <#FCD472><count><#f2ebd7> unclaimed items. <click:run_command:/overflow><hover:show_text:'<#8FAA87>Open overflow storage'><#FCD472>[ᴏᴘᴇɴ]</hover></click>"
   display: chat

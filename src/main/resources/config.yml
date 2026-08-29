@@ -155,6 +155,21 @@ integration:
   phoenixcrates:
     enabled: false
     intercept-rewards: true
+  # AxTrade integration
+  # Rescues a player's staged trade offer when they die mid-trade.
+  #
+  # AxTrade has no death listener: dying force-closes the trade window, which aborts
+  # the trade and hands each side's offer back into their inventory with no liveness
+  # check. For the player who just died that inventory is discarded on respawn, so
+  # their offer is destroyed with no drop and no trace. When enabled, OakOverflow
+  # takes that offer out of the trade window before AxTrade hands it back and stores
+  # it in overflow, so the player recovers it with /overflow.
+  #
+  # This cannot duplicate items: AxTrade reads the same slots afterwards, so emptying
+  # them makes its hand-back a no-op. The surviving trade partner is never touched.
+  axtrade:
+    enabled: true
+    rescue-on-death: true
   # PlaceholderAPI integration
   # Provides: %oakoverflow_unclaimed_count%, %oakoverflow_has_items%, %oakoverflow_has_items_yes_no%
   placeholderapi:

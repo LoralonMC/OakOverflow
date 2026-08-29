@@ -530,6 +530,14 @@ public class ConfigManager {
         return config.getBoolean("integration.phoenixcrates.intercept-rewards", true);
     }
 
+    public boolean isAxTradeEnabled() {
+        return config.getBoolean("integration.axtrade.enabled", true);
+    }
+
+    public boolean isAxTradeRescueOnDeath() {
+        return config.getBoolean("integration.axtrade.rescue-on-death", true);
+    }
+
     public boolean isPlaceholderAPIEnabled() {
         return config.getBoolean("integration.placeholderapi.enabled", true);
     }

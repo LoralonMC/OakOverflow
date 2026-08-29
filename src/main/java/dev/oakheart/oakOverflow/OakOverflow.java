@@ -5,6 +5,7 @@ import dev.oakheart.oakoverflow.api.OakOverflowAPIImpl;
 import dev.oakheart.oakoverflow.commands.AdminCommand;
 import dev.oakheart.oakoverflow.commands.UnclaimedCommand;
 import dev.oakheart.oakoverflow.config.ConfigManager;
+import dev.oakheart.oakoverflow.listeners.AxTradeListener;
 import dev.oakheart.oakoverflow.listeners.ItemInterceptListener;
 import dev.oakheart.oakoverflow.listeners.PhoenixCratesListener;
 import dev.oakheart.oakoverflow.managers.ClaimManager;
@@ -86,6 +87,11 @@ public final class OakOverflow extends JavaPlugin {
         if (phoenixCrates != null) {
             getLogger().info("PhoenixCratesPro detected.");
         }
+
+        Plugin axTrade = getServer().getPluginManager().getPlugin("AxTrade");
+        if (axTrade != null) {
+            getLogger().info("AxTrade detected.");
+        }
     }
 
     private void initializeComponents() {
@@ -138,6 +144,7 @@ public final class OakOverflow extends JavaPlugin {
         getServer().getPluginManager().registerEvents(notificationManager, this);
 
         registerPhoenixCratesIntegration();
+        registerAxTradeIntegration();
     }
 
     private void registerPhoenixCratesIntegration() {
@@ -160,6 +167,40 @@ public final class OakOverflow extends JavaPlugin {
             getLogger().info("PhoenixCratesPro integration enabled.");
         } catch (Exception e) {
             getLogger().warning("Failed to enable PhoenixCratesPro integration: " + e.getMessage());
+        }
+    }
+
+    /**
+     * AxTrade destroys a player's staged offer if they die mid-trade (it hands the offer
+     * back into an inventory the server is about to discard). This listener takes the
+     * offer out of the trade window first and stores it in overflow instead.
+     */
+    private void registerAxTradeIntegration() {
+        Plugin axTradePlugin = getServer().getPluginManager().getPlugin("AxTrade");
+        if (axTradePlugin == null || !axTradePlugin.isEnabled()) {
+            return;
+        }
+
+        if (!configManager.isAxTradeEnabled() || !configManager.isAxTradeRescueOnDeath()) {
+            getLogger().info("AxTrade detected but the cancelled-trade rescue is disabled in config.");
+            return;
+        }
+
+        // Reading the trade window relies on two of AxTrade's internal fields. If they are
+        // gone, stay off entirely rather than half-claim an offer.
+        if (!AxTradeListener.isSupported()) {
+            getLogger().warning("AxTrade detected but its trade window could not be read, so the "
+                    + "cancelled-trade rescue is inactive. AxTrade has most likely changed internally "
+                    + "and OakOverflow needs updating to match.");
+            return;
+        }
+
+        try {
+            getServer().getPluginManager().registerEvents(
+                    new AxTradeListener(this, api, messageManager, notificationManager), this);
+            getLogger().info("AxTrade integration enabled (rescuing offers from trades cancelled by death).");
+        } catch (Exception e) {
+            getLogger().warning("Failed to enable AxTrade integration: " + e.getMessage());
         }
     }
 
