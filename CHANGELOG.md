@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-20
+
 ### Added
 
 - Identical items now stack in the overflow GUI. Storage still writes one entry per item received (that insert-only design is what keeps concurrent adds and claims race-free), but the GUI gathers matching entries and repacks them into full stack-sized slots that read exactly like a chest: 300 separately-received emeralds show as 64/64/64/64/44 across five slots instead of 300. Every slot shows its true count, and clicking one claims it
@@ -18,6 +20,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Targets Paper 26.3 (`api-version: '26.3'`, built against paper-api 26.3). This build no longer loads on 26.1.2.
 - **`advanced.max-query-limit` now defaults to -1 (unlimited).** The old 10000 cap truncated a newest-first query, so once a player passed it their *oldest* items silently disappeared from both `/overflow` and claimall. The v3 migration resets existing configs to the new default; a cap that is still set now logs a warning whenever it truncates
 - **Claiming only takes what fits.** Previously every row was marked claimed, handed over, and the rejects written back as new rows, which churned the whole table and reset every leftover item's age on any claim with a nearly-full inventory. Rows that don't fit are now left untouched in overflow
 - **Unclaimed counts report items, not storage rows.** A single waiting stack of 64 used to be announced as "1 unclaimed item". This affects `%oakoverflow_unclaimed_count%`, join and action bar notifications, and `limits.max-items-per-player`, which now measures items as its own description always said
@@ -83,3 +86,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Configurable GUI button materials and sounds
 - MiniMessage formatting for all player-facing messages
 - bStats metrics
+

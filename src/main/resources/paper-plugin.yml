@@ -2,7 +2,7 @@ name: OakOverflow
 version: '${version}'
 main: dev.oakheart.oakoverflow.OakOverflow
 description: 'Smart Inventory Overflow Storage System.'
-api-version: '26.1.2'
+api-version: '26.3'
 authors:
   - Loralon
 website: https://github.com/LoralonMC/OakOverflow
