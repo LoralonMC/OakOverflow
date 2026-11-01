@@ -42,6 +42,20 @@ public interface DataStore {
      */
     CompletableFuture<List<Integer>> markAsClaimedBatchReturningIds(UUID playerUUID, List<Integer> itemIds);
 
+    /**
+     * Puts rows a claim marked back into the unclaimed state, for a claim that won its
+     * mark but could not hand the items over (the player left, or the plugin is
+     * shutting down). Restores the original rows, so nothing is re-serialised.
+     */
+    CompletableFuture<Integer> unmarkClaimed(UUID playerUUID, List<Integer> itemIds);
+
+    /**
+     * {@link #unmarkClaimed} run on the calling thread. Only for a caller already on the
+     * storage thread (a claim callback finishing during shutdown, when the executor no
+     * longer accepts new work).
+     */
+    int unmarkClaimedNow(UUID playerUUID, List<Integer> itemIds);
+
     CompletableFuture<Integer> clearPlayerItems(UUID playerUUID);
 
     CompletableFuture<Integer> clearAllItems();

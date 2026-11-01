@@ -51,6 +51,8 @@ public abstract class AbstractDatabase implements DataStore {
             "SELECT COALESCE(SUM(amount), 0) as count FROM overflow_items WHERE player_uuid = ? AND claimed = 0";
     protected static final String SQL_MARK_CLAIMED =
             "UPDATE overflow_items SET claimed = 1, claimed_timestamp = ? WHERE id = ? AND player_uuid = ? AND claimed = 0";
+    protected static final String SQL_UNMARK_CLAIMED =
+            "UPDATE overflow_items SET claimed = 0, claimed_timestamp = NULL WHERE id = ? AND player_uuid = ? AND claimed = 1";
     protected static final String SQL_CLEAR_PLAYER =
             "DELETE FROM overflow_items WHERE player_uuid = ? AND claimed = 0";
     protected static final String SQL_CLEAR_ALL =
@@ -432,6 +434,43 @@ public abstract class AbstractDatabase implements DataStore {
             }
             return marked;
         }, executor);
+    }
+
+    @Override
+    public CompletableFuture<Integer> unmarkClaimed(UUID playerUUID, List<Integer> itemIds) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            return CompletableFuture.completedFuture(0);
+        }
+        return CompletableFuture.supplyAsync(() -> unmarkClaimedNow(playerUUID, itemIds), executor);
+    }
+
+    @Override
+    public int unmarkClaimedNow(UUID playerUUID, List<Integer> itemIds) {
+        if (itemIds == null || itemIds.isEmpty()) {
+            return 0;
+        }
+        int restored = 0;
+        try {
+            Connection conn = getConnection();
+            try {
+                PreparedStatement stmt = prepareStatement(conn, SQL_UNMARK_CLAIMED);
+                try {
+                    for (int itemId : itemIds) {
+                        stmt.setInt(1, itemId);
+                        stmt.setString(2, playerUUID.toString());
+                        restored += stmt.executeUpdate();
+                    }
+                } finally {
+                    returnStatement(stmt);
+                }
+            } finally {
+                releaseConnection(conn);
+            }
+        } catch (SQLException e) {
+            logger.log(Level.SEVERE, "Failed to restore claimed rows " + itemIds + " for " + playerUUID
+                    + "; those items are marked claimed but were never handed over", e);
+        }
+        return restored;
     }
 
     @Override

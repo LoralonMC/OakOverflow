@@ -7,11 +7,13 @@ import dev.oakheart.oakoverflow.events.ItemClaimedEvent;
 import dev.oakheart.oakoverflow.events.ItemsClaimedAllEvent;
 import dev.oakheart.message.MessageManager;
 import dev.oakheart.oakoverflow.model.OverflowItem;
+import dev.oakheart.oakoverflow.storage.DataStore;
 import net.kyori.adventure.text.minimessage.tag.resolver.Placeholder;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.plugin.IllegalPluginAccessException;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -19,7 +21,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Level;
 
 /**
@@ -33,14 +38,45 @@ public class ClaimManager {
 
     private final OakOverflow plugin;
     private final OakOverflowAPI api;
+    private final DataStore dataStore;
     private final ConfigManager config;
     private final MessageManager messages;
 
-    public ClaimManager(OakOverflow plugin, OakOverflowAPI api, ConfigManager config, MessageManager messages) {
+    /**
+     * Claims whose rows are marked claimed but not yet handed over, by token.
+     *
+     * <p>Marking happens off the main thread and the give one tick later on it, so for a
+     * moment the rows belong to nobody: a player who leaves, or a shutdown that cancels
+     * the pending give, would lose them. Whoever removes a token first owns its rows: the
+     * give task hands them over, {@link #shutdown()} and the fallbacks put them back.
+     */
+    private final Map<Long, PendingClaim> pending = new ConcurrentHashMap<>();
+    private final AtomicLong nextToken = new AtomicLong();
+
+    private record PendingClaim(UUID player, List<Integer> rowIds) {}
+
+    public ClaimManager(OakOverflow plugin, OakOverflowAPI api, DataStore dataStore,
+                        ConfigManager config, MessageManager messages) {
         this.plugin = plugin;
         this.api = api;
+        this.dataStore = dataStore;
         this.config = config;
         this.messages = messages;
+    }
+
+    /**
+     * Puts back every claim still waiting for its give. Call from onDisable before the
+     * data store closes: once the plugin is disabled the scheduler drops pending tasks,
+     * so a give that has not run by now never will.
+     */
+    public void shutdown() {
+        for (Long token : List.copyOf(pending.keySet())) {
+            PendingClaim claim = pending.remove(token);
+            if (claim == null) continue;
+            int restored = dataStore.unmarkClaimed(claim.player(), claim.rowIds()).join();
+            plugin.getLogger().info("Shutdown interrupted a claim; restored " + restored
+                    + " row(s) to overflow for " + claim.player());
+        }
     }
 
     /**
@@ -170,69 +206,123 @@ public class ClaimManager {
         // The per-id variant reports exactly which rows this call claimed: a row
         // taken by a racing claim (its give is already in flight) must not be given
         // again here, or two clicks within one DB roundtrip duplicate it.
-        api.markAsClaimedBatchReturningIds(player.getUniqueId(), itemIds).thenAccept(markedIds -> {
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                if (markedIds.isEmpty()) {
-                    messages.sendCommand(player, "database-error");
-                    result.complete(new ClaimResult(List.of(), 0, leftBehind));
-                    return;
-                }
+        UUID owner = player.getUniqueId();
+        api.markAsClaimedBatchReturningIds(owner, itemIds).thenAccept(markedIds -> {
+            if (markedIds.isEmpty()) {
+                // A racing claim took every row first: normal, and its give is in flight.
+                completeOnMain(result, new ClaimResult(List.of(), 0, leftBehind));
+                return;
+            }
+            if (!plugin.isEnabled()) {
+                // Shutting down: nothing can be handed over, and the storage executor no
+                // longer takes new work, so restore the rows right here on its thread.
+                dataStore.unmarkClaimedNow(owner, markedIds);
+                result.complete(new ClaimResult(List.of(), 0, leftBehind));
+                return;
+            }
 
-                List<OverflowItem> given = new ArrayList<>();
-                List<CompletableFuture<?>> writeBacks = new ArrayList<>();
-                int givenAmount = 0;
+            long token = nextToken.incrementAndGet();
+            pending.put(token, new PendingClaim(owner, markedIds));
+            try {
+                Bukkit.getScheduler().runTask(plugin, () -> {
+                    if (pending.remove(token) == null) {
+                        return; // shutdown already restored these rows
+                    }
+                    if (!player.isOnline()) {
+                        // Left during the round trip. Their inventory is already saved, so
+                        // anything added now would vanish; put the rows back instead.
+                        dataStore.unmarkClaimed(owner, markedIds).exceptionally(t -> {
+                            plugin.getLogger().log(Level.SEVERE, "Could not restore rows " + markedIds
+                                    + " for " + player.getName() + " after they left mid-claim", t);
+                            return 0;
+                        });
+                        result.complete(new ClaimResult(List.of(), 0, leftBehind));
+                        return;
+                    }
 
-                for (int rowId : markedIds) {
-                    OverflowItem row = rowsById.get(rowId);
-                    if (row == null) continue;
+                    List<OverflowItem> given = new ArrayList<>();
+                    List<CompletableFuture<?>> writeBacks = new ArrayList<>();
+                    int givenAmount = 0;
 
-                    // Winning the mark consumes the whole row, so everything not handed
-                    // over here has to be written back.
-                    int wanted = Math.min(wantedByRow.getOrDefault(rowId, 0), row.getAmount());
-                    int handedOver = 0;
+                    for (int rowId : markedIds) {
+                        OverflowItem row = rowsById.get(rowId);
+                        if (row == null) continue;
 
-                    if (wanted > 0) {
-                        ItemStack stack = row.getItem();
-                        stack.setAmount(wanted);
-                        int rejected = 0;
-                        // Pre-selected to fit, but the DB roundtrip above gives the player
-                        // a window to pick something up, so keep this path as a net.
-                        for (ItemStack left : player.getInventory().addItem(stack).values()) {
-                            rejected += left.getAmount();
+                        // Winning the mark consumes the whole row, so everything not handed
+                        // over here has to be written back.
+                        int wanted = Math.min(wantedByRow.getOrDefault(rowId, 0), row.getAmount());
+                        int handedOver = 0;
+
+                        if (wanted > 0) {
+                            ItemStack stack = row.getItem();
+                            stack.setAmount(wanted);
+                            int rejected = 0;
+                            // Pre-selected to fit, but the DB roundtrip above gives the player
+                            // a window to pick something up, so keep this path as a net.
+                            for (ItemStack left : player.getInventory().addItem(stack).values()) {
+                                rejected += left.getAmount();
+                            }
+                            handedOver = wanted - rejected;
                         }
-                        handedOver = wanted - rejected;
+
+                        if (handedOver > 0) {
+                            given.add(row);
+                            givenAmount += handedOver;
+                        }
+
+                        int writeBack = row.getAmount() - handedOver;
+                        if (writeBack > 0) {
+                            writeBacks.add(writeBack(player, row, writeBack));
+                        }
                     }
 
-                    if (handedOver > 0) {
-                        given.add(row);
-                        givenAmount += handedOver;
-                    }
+                    Bukkit.getPluginManager().callEvent(new ItemsClaimedAllEvent(player, given));
 
-                    int writeBack = row.getAmount() - handedOver;
-                    if (writeBack > 0) {
-                        writeBacks.add(writeBack(player, row, writeBack));
-                    }
+                    // Only report done once the write-backs have landed, so a caller that
+                    // reloads the view on completion sees them.
+                    ClaimResult claimResult = new ClaimResult(given, givenAmount, leftBehind);
+                    CompletableFuture.allOf(writeBacks.toArray(new CompletableFuture[0]))
+                            .whenComplete((ignored, error) -> completeOnMain(result, claimResult));
+                });
+            } catch (IllegalPluginAccessException e) {
+                // Disabled between the check above and scheduling. If shutdown() did not
+                // get to this token first, restore the rows ourselves (still on the
+                // storage thread, which is draining rather than accepting work).
+                if (pending.remove(token) != null) {
+                    dataStore.unmarkClaimedNow(owner, markedIds);
                 }
-
-                Bukkit.getPluginManager().callEvent(new ItemsClaimedAllEvent(player, given));
-
-                // Only report done once the write-backs have landed, so a caller that
-                // reloads the view on completion sees them.
-                ClaimResult claimResult = new ClaimResult(given, givenAmount, leftBehind);
-                CompletableFuture.allOf(writeBacks.toArray(new CompletableFuture[0]))
-                        .whenComplete((ignored, error) -> Bukkit.getScheduler().runTask(plugin,
-                                () -> result.complete(claimResult)));
-            });
+                result.complete(new ClaimResult(List.of(), 0, leftBehind));
+            }
         }).exceptionally(throwable -> {
             plugin.getLogger().log(Level.SEVERE, "Failed to batch claim items", throwable);
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                messages.sendCommand(player, "database-error");
+            if (plugin.isEnabled()) {
+                completeOnMain(result, new ClaimResult(List.of(), 0, leftBehind),
+                        () -> messages.sendCommand(player, "database-error"));
+            } else {
                 result.complete(new ClaimResult(List.of(), 0, leftBehind));
-            });
+            }
             return null;
         });
 
         return result;
+    }
+
+    /** Completes on the main thread while enabled; directly once the scheduler is gone. */
+    private void completeOnMain(CompletableFuture<ClaimResult> result, ClaimResult value) {
+        completeOnMain(result, value, null);
+    }
+
+    private void completeOnMain(CompletableFuture<ClaimResult> result, ClaimResult value, Runnable before) {
+        try {
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (before != null) {
+                    before.run();
+                }
+                result.complete(value);
+            });
+        } catch (IllegalPluginAccessException e) {
+            result.complete(value);
+        }
     }
 
     /**

@@ -7,6 +7,7 @@ import dev.oakheart.oakoverflow.util.CountCache;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -64,17 +65,18 @@ public class OakOverflowAPIImpl implements OakOverflowAPI {
                     + " rows (source: " + source + ")");
         }
 
-        CompletableFuture<OverflowItem> firstRow = null;
+        // Every slice is awaited, so a failure on any of them reaches the caller's
+        // error handling rather than only the first one's. The first row is returned.
+        List<CompletableFuture<OverflowItem>> slices = new ArrayList<>();
         int remaining = amount;
         while (remaining > 0) {
             int slice = Math.min(remaining, maxStack);
-            CompletableFuture<OverflowItem> inserted = insertRow(playerUUID, playerName, item, slice, source);
-            if (firstRow == null) {
-                firstRow = inserted;
-            }
+            slices.add(insertRow(playerUUID, playerName, item, slice, source));
             remaining -= slice;
         }
-        return firstRow;
+        CompletableFuture<OverflowItem> firstRow = slices.get(0);
+        return CompletableFuture.allOf(slices.toArray(new CompletableFuture[0]))
+                .thenApply(ignored -> firstRow.join());
     }
 
     /**

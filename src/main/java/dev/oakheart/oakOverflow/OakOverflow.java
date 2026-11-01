@@ -71,6 +71,9 @@ public final class OakOverflow extends JavaPlugin {
         if (notificationManager != null) {
             notificationManager.shutdown();
         }
+        if (claimManager != null) {
+            claimManager.shutdown();
+        }
         if (dataStore != null) {
             dataStore.close();
         }
@@ -113,7 +116,7 @@ public final class OakOverflow extends JavaPlugin {
         api = new OakOverflowAPIImpl(dataStore, configManager, getLogger());
 
         // Claim manager
-        claimManager = new ClaimManager(this, api, configManager, messageManager);
+        claimManager = new ClaimManager(this, api, dataStore, configManager, messageManager);
 
         // Notifications
         notificationManager = new NotificationManager(this, api, configManager, messageManager);

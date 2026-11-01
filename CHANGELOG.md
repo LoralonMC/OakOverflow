@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.1] - 2026-11-01
+
+### Security
+
+- Blocked drop rescue stored drops by creative players, so a stack dragged out of the creative
+  menu with a full inventory (cancelled by OakCreative) became a real overflow item claimable in
+  survival. Creative and spectator players are never rescued.
+
+### Fixed
+
+- A player who disconnected between clicking a claim and receiving it lost the claimed rows:
+  they were marked claimed and then handed to an inventory that had already been saved. The
+  rows are now put back into overflow.
+- A claim in flight during shutdown was marked claimed and never delivered. Shutdown now
+  restores any claim still waiting for its give, and a claim that finishes while the plugin is
+  disabling restores its rows instead of failing to schedule.
+- An API add larger than one stack is stored as several rows, but only the first row's result
+  reached the caller, so a failure on a later row went unnoticed. Every row is now awaited.
+- A double-click that found its rows already taken by the first click reported a database error.
+
 ## [1.1.0] - 2026-10-20
 
 ### Added

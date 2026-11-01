@@ -10,6 +10,7 @@ import dev.oakheart.oakoverflow.config.ConfigManager;
 import dev.oakheart.oakoverflow.util.InventoryHelper;
 import dev.oakheart.oakoverflow.util.ItemNameUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.entity.Item;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -166,10 +167,21 @@ public class ItemInterceptListener implements Listener {
      * <p>{@code oakoverflow.bypass} is deliberately <b>not</b> honoured here. Bypass
      * means "let my items drop normally instead of going to overflow", and on this
      * path they cannot drop at all, so honouring it would mean deleting them.
+     *
+     * <p>Creative and spectator players are never rescued. A creative drop can come
+     * straight out of the creative menu (a stack that was never in the inventory), and
+     * OakCreative cancels every such drop; rescuing it would hand the player a real item
+     * claimable in survival. Nothing a creative player loses here was ever theirs.
      */
     @EventHandler(priority = EventPriority.MONITOR)
     public void onPlayerDropItem(PlayerDropItemEvent event) {
         if (!event.isCancelled() || !config.isDropRescueEnabled()) {
+            return;
+        }
+
+        Player player = event.getPlayer();
+        GameMode mode = player.getGameMode();
+        if (mode == GameMode.CREATIVE || mode == GameMode.SPECTATOR) {
             return;
         }
 
@@ -178,7 +190,6 @@ public class ItemInterceptListener implements Listener {
             return;
         }
 
-        Player player = event.getPlayer();
         int destroyed = stack.getAmount() - InventoryHelper.calculateMaxFit(player, stack);
         if (destroyed <= 0) {
             return; // CraftBukkit's fallback returns the whole stack, nothing is lost
